@@ -3,108 +3,142 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>360 Viewer with Gyro & Optical Flow</title>
+    <title>360 Viewer + Visual Tracking</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #000; font-family: sans-serif; }
-        #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; }
+        body { margin: 0; overflow: hidden; background-color: #111; font-family: sans-serif; }
         
-        /* The video is hidden visually but active for processing */
-        #input-video { 
-            position: absolute; top: 0; left: 0; 
-            width: 320px; height: 240px; 
-            z-index: 1; opacity: 0; pointer-events: none;
+        /* 360 View Container */
+        #canvas-container { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; 
         }
 
+        /* Camera Preview Area (Half Screen) */
+        #camera-wrapper {
+            position: absolute; 
+            bottom: 0; left: 0; 
+            width: 100%; height: 50%; /* Half screen height */
+            z-index: 10;
+            background: rgba(0,0,0,0.5);
+            display: none; /* Hidden until camera starts */
+            pointer-events: none; /* Let touches pass through */
+        }
+        
+        #input-video {
+            width: 100%; height: 100%; 
+            object-fit: cover; 
+            opacity: 0.8;
+        }
+
+        /* Overlay canvas for drawing the tracking grids */
+        #debug-canvas {
+            position: absolute; top: 0; left: 0; 
+            width: 100%; height: 100%;
+        }
+
+        /* UI / Messages */
         #ui-layer {
             position: absolute; top: 10px; left: 10px; z-index: 20;
-            color: lime; text-shadow: 1px 1px 2px black; pointer-events: none;
+            color: lime; text-shadow: 1px 1px 2px black; font-size: 14px;
+            pointer-events: none;
+        }
+
+        .error-msg { 
+            color: #ff4444; background: rgba(0,0,0,0.8); 
+            padding: 8px; margin-top: 5px; border-left: 3px solid red;
         }
         
-        .error-msg { color: red; background: rgba(0,0,0,0.7); padding: 5px; margin-top: 5px; }
-        .status-msg { background: rgba(0,0,0,0.5); padding: 5px; }
+        .status-msg { background: rgba(0,0,0,0.6); padding: 5px; border-radius: 4px; }
 
+        /* Start Button */
         #start-btn {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            z-index: 30; padding: 15px 30px; font-size: 18px;
-            background: white; border: none; cursor: pointer; border-radius: 5px;
+            position: absolute; top: 50%; left: 50%; 
+            transform: translate(-50%, -50%);
+            z-index: 30; padding: 20px 40px; font-size: 20px;
+            background: #28a745; color: white; border: none; 
+            cursor: pointer; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);
         }
     </style>
-    <!-- Three.js for 360 view -->
+    <!-- Three.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <!-- OpenCV.js for Tracking Fallback -->
+    <!-- OpenCV.js -->
     <script async src="https://docs.opencv.org/4.5.4/opencv.js" onload="onOpenCvReady();" type="text/javascript"></script>
 </head>
 <body>
 
     <div id="ui-layer">
-        <div id="status" class="status-msg">Loading OpenCV...</div>
+        <div id="status" class="status-msg">Initializing System...</div>
         <div id="errors"></div>
+        <div id="tracking-info"></div>
     </div>
 
-    <button id="start-btn" onclick="startExperience()">Tap to Start</button>
+    <button id="start-btn" onclick="startExperience()">TAP TO START</button>
 
-    <video id="input-video" playsinline muted autoplay></video>
     <div id="canvas-container"></div>
 
+    <!-- Container for Video + Visual Debugging -->
+    <div id="camera-wrapper">
+        <video id="input-video" playsinline muted autoplay></video>
+        <canvas id="debug-canvas"></canvas>
+    </div>
+
 <script>
+    // --- Configuration ---
+    const IMAGE_URL = 'https://c1.wallpaperflare.com/preview/926/262/443/astrophotography-death-valley-national-park-photo-nevada.jpg';
+    const TRACKING_GRID_SIZE = 12; // 12x12 pixel grids
+    const SENSITIVITY = 0.08;      // Rotation speed
+    
     // --- Global Variables ---
     let camera, scene, renderer, sphere;
-    let isGyroActive = false;
     let cvReady = false;
+    let isTracking = false;
     let videoElement = document.getElementById('input-video');
-    
-    // Tracking Variables
-    let cap, oldFrame, oldPoints, newPoints, frameGray, oldGray;
-    let streaming = false;
-    let sensitivity = 0.05; // Speed of rotation via camera
+    let debugCanvas = document.getElementById('debug-canvas');
+    let debugCtx = debugCanvas.getContext('2d');
 
-    function logError(msg) {
-        const d = document.createElement('div');
-        d.className = 'error-msg';
-        d.innerText = msg;
-        document.getElementById('errors').appendChild(d);
-        console.error(msg);
-    }
+    // OpenCV Variables
+    let cap, oldFrame, oldGray, frameGray, oldPoints, newPoints, statusMat, errMat;
+    let winSize, maxLevel, criteria;
 
-    function updateStatus(msg) {
-        document.getElementById('status').innerText = msg;
+    function logMsg(msg, isError = false) {
+        const el = document.getElementById(isError ? 'errors' : 'status');
+        if(isError) {
+            const d = document.createElement('div');
+            d.className = 'error-msg';
+            d.innerText = msg;
+            el.appendChild(d);
+            console.error(msg);
+        } else {
+            el.innerText = msg;
+            console.log(msg);
+        }
     }
 
     function onOpenCvReady() {
         cvReady = true;
-        updateStatus("System Ready. Press Start.");
+        logMsg("System Ready. Waiting for user input.");
     }
 
-    // --- 1. Three.js Setup (The 360 View) ---
+    // --- 1. Three.js Initialization ---
     function initThreeJS() {
         const container = document.getElementById('canvas-container');
-        
         scene = new THREE.Scene();
         camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        
-        // Invert camera inside sphere to see texture
-        camera.scale.x = -1; 
+        camera.scale.x = -1; // Invert for inside view
 
         renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         container.appendChild(renderer.domElement);
 
         const geometry = new THREE.SphereGeometry(500, 60, 40);
-        
-        // Load the image
         const loader = new THREE.TextureLoader();
-        loader.crossOrigin = "anonymous"; // Attempt to handle CORS
+        loader.crossOrigin = "anonymous";
         
-        // URL provided in prompt
-        const imageUrl = 'https://c1.wallpaperflare.com/preview/926/262/443/astrophotography-death-valley-national-park-photo-nevada.jpg';
-        
-        loader.load(imageUrl, (texture) => {
+        loader.load(IMAGE_URL, (texture) => {
             const material = new THREE.MeshBasicMaterial({ map: texture });
             sphere = new THREE.Mesh(geometry, material);
             scene.add(sphere);
-            updateStatus("Image Loaded. Initializing controls...");
         }, undefined, (err) => {
-            logError("Error loading image (CORS block likely). Try a local image or a different host.");
+            logMsg("Error loading image. Check CORS or URL.", true);
         });
 
         window.addEventListener('resize', () => {
@@ -121,219 +155,231 @@
         renderer.render(scene, camera);
     }
 
-    // --- 2. Main Entry Point ---
+    // --- 2. Main Logic ---
     async function startExperience() {
         document.getElementById('start-btn').style.display = 'none';
+        
+        // Security Check
+        if (!window.isSecureContext) {
+            logMsg("CRITICAL ERROR: Not running in Secure Context (HTTPS/localhost). Camera access will fail.", true);
+        }
+
         initThreeJS();
 
-        // Check for Gyroscope permissions (iOS 13+ requires request)
+        // Try Gyroscope First
         if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
             try {
                 const response = await DeviceOrientationEvent.requestPermission();
                 if (response === 'granted') {
                     setupGyro();
                 } else {
-                    logError("Gyro permission denied. Switching to Camera Tracking.");
-                    setupCameraTracking();
+                    logMsg("Gyro permission denied. Starting Camera...", true);
+                    setupCamera();
                 }
             } catch (e) {
-                logError(e);
-                setupCameraTracking();
+                logMsg("Gyro Error: " + e, true);
+                setupCamera();
             }
         } else {
-            // Non-iOS or older devices
-            setupGyro();
-            // We set a timeout to check if gyro data is actually flowing, if not, fallback
+            // Android/Desktop or non-permission iOS
+            window.addEventListener('deviceorientation', handleGyro);
+            // Wait 1s to see if we actually get data. If not, start camera.
             setTimeout(() => {
-                if(!isGyroActive) {
-                    updateStatus("No Gyro data detected. Attempting Camera Fallback...");
-                    setupCameraTracking();
+                if (!gyroDataReceived) {
+                    logMsg("No Gyro data detected. Falling back to Camera...");
+                    window.removeEventListener('deviceorientation', handleGyro);
+                    setupCamera();
                 }
-            }, 2000);
+            }, 1000);
         }
     }
 
-    // --- 3. Method 1: Gyroscope ---
+    // --- 3. Gyroscope Logic ---
+    let gyroDataReceived = false;
     function setupGyro() {
-        window.addEventListener('deviceorientation', (event) => {
-            if (!event.alpha && !event.beta) return; // No data
-            isGyroActive = true;
-            updateStatus("Control: Gyroscope");
-
-            // Convert degrees to radians and update camera rotation
-            // Simplified mapping. A full VR control usually needs Quaternion math.
-            const lat = Math.max(-85, Math.min(85, 90 - event.beta));
-            const lon = event.alpha ? event.alpha : 0;
-
-            const phi = THREE.Math.degToRad(90 - lat);
-            const theta = THREE.Math.degToRad(lon);
-
-            const targetX = 500 * Math.sin(phi) * Math.cos(theta);
-            const targetY = 500 * Math.cos(phi);
-            const targetZ = 500 * Math.sin(phi) * Math.sin(theta);
-
-            camera.lookAt(targetX, targetY, targetZ);
-        });
+        window.addEventListener('deviceorientation', handleGyro);
     }
 
-    // --- 4. Method 2: Camera Optical Flow (Fallback) ---
-    function setupCameraTracking() {
+    function handleGyro(event) {
+        if (event.alpha === null || event.beta === null) return;
+        gyroDataReceived = true;
+        logMsg("Mode: Gyroscope Control");
+
+        // Simple mapping
+        const lat = Math.max(-85, Math.min(85, 90 - event.beta));
+        const lon = event.alpha || 0;
+        const phi = THREE.Math.degToRad(90 - lat);
+        const theta = THREE.Math.degToRad(lon);
+
+        const targetX = 500 * Math.sin(phi) * Math.cos(theta);
+        const targetY = 500 * Math.cos(phi);
+        const targetZ = 500 * Math.sin(phi) * Math.sin(theta);
+        camera.lookAt(targetX, targetY, targetZ);
+    }
+
+    // --- 4. Camera & Visual Tracking Logic ---
+    function setupCamera() {
         if (!cvReady) {
-            logError("OpenCV not ready yet.");
+            logMsg("OpenCV not ready. Refresh page.", true);
             return;
         }
 
-        updateStatus("Control: Camera Tracking (Please allow camera access)");
+        document.getElementById('camera-wrapper').style.display = 'block';
+        logMsg("Mode: Optical Flow Tracking (Camera)");
 
         const constraints = {
             video: {
-                facingMode: 'environment', // Back camera if available
-                width: 320,
-                height: 240
-            },
-            audio: false
+                facingMode: 'environment', // Rear camera
+                width: { ideal: 320 },
+                height: { ideal: 240 }
+            }
         };
 
         navigator.mediaDevices.getUserMedia(constraints)
-            .then(function(stream) {
+            .then((stream) => {
                 videoElement.srcObject = stream;
                 videoElement.play();
-                videoElement.onloadedmetadata = function() {
-                    streaming = true;
+                videoElement.onloadedmetadata = () => {
+                    // Match canvas size to video render size
+                    debugCanvas.width = videoElement.videoWidth;
+                    debugCanvas.height = videoElement.videoHeight;
                     initTracking();
                 };
             })
-            .catch(function(err) {
-                logError("Camera Error: " + err.name + " " + err.message);
+            .catch((err) => {
+                logMsg("Camera Access Denied: " + err.message, true);
+                logMsg("Ensure you are on HTTPS and allowed permissions.", true);
             });
     }
 
     function initTracking() {
-        // Setup OpenCV variables
+        const width = videoElement.videoWidth;
+        const height = videoElement.videoHeight;
+
+        // Init OpenCV Mats
         cap = new cv.VideoCapture(videoElement);
-        
-        oldFrame = new cv.Mat(videoElement.height, videoElement.width, cv.CV_8UC4);
+        oldFrame = new cv.Mat(height, width, cv.CV_8UC4);
         oldGray = new cv.Mat();
-        
+        frameGray = new cv.Mat();
+        oldPoints = new cv.Mat();
+        newPoints = new cv.Mat();
+        statusMat = new cv.Mat();
+        errMat = new cv.Mat();
+
         // Read first frame
         cap.read(oldFrame);
         cv.cvtColor(oldFrame, oldGray, cv.COLOR_RGBA2GRAY);
 
-        // Define the 9 points grid (3x3)
-        // Video is 320x240. We want a grid in the center.
-        oldPoints = new cv.Mat(9, 1, cv.CV_32FC2);
-        generateGridPoints(oldPoints);
+        // Parameters for Lucas-Kanade
+        winSize = new cv.Size(TRACKING_GRID_SIZE, TRACKING_GRID_SIZE);
+        maxLevel = 2;
+        criteria = new cv.TermCriteria(cv.TermCriteria_EPS | cv.TermCriteria_COUNT, 10, 0.03);
 
-        // Arrays for calculation
-        frameGray = new cv.Mat();
-        newPoints = new cv.Mat();
-        let status = new cv.Mat();
-        let err = new cv.Mat();
-        
-        // Window size for Lucas-Kanade (12x12 as requested in prompt, though passed as 12,12 size)
-        let winSize = new cv.Size(12, 12); 
-        let maxLevel = 2;
-        let criteria = new cv.TermCriteria(cv.TermCriteria_EPS | cv.TermCriteria_COUNT, 10, 0.03);
-
-        updateStatus("Control: Camera Active. Move device to pan.");
-
-        function processVideo() {
-            if (!streaming) return;
-
-            try {
-                let begin = Date.now();
-
-                // Read new frame
-                let frame = new cv.Mat(videoElement.height, videoElement.width, cv.CV_8UC4);
-                cap.read(frame);
-                cv.cvtColor(frame, frameGray, cv.COLOR_RGBA2GRAY);
-
-                // Calculate Optical Flow
-                cv.calcOpticalFlowPyrLK(oldGray, frameGray, oldPoints, newPoints, status, err, winSize, maxLevel, criteria);
-
-                // Calculate average movement
-                let deltaX = 0;
-                let deltaY = 0;
-                let pointsFound = 0;
-                let resetNeeded = false;
-
-                // Loop through 9 points
-                for (let i = 0; i < status.rows; i++) {
-                    if (status.data[i] === 1) { // If point was successfully tracked
-                        let pt1x = oldPoints.data32F[i * 2];
-                        let pt1y = oldPoints.data32F[i * 2 + 1];
-                        let pt2x = newPoints.data32F[i * 2];
-                        let pt2y = newPoints.data32F[i * 2 + 1];
-
-                        deltaX += (pt2x - pt1x);
-                        deltaY += (pt2y - pt1y);
-                        pointsFound++;
-
-                        // Logic: "when the tracking is going out of the screen, track a new grid"
-                        // Video boundaries: 0 to 320 (width), 0 to 240 (height)
-                        // If any point is within 10px of edge, trigger reset
-                        if(pt2x < 10 || pt2x > 310 || pt2y < 10 || pt2y > 230) {
-                            resetNeeded = true;
-                        }
-                    }
-                }
-
-                // If not enough points found or points moved out of bounds
-                if (pointsFound < 4 || resetNeeded) {
-                   // Generate new grid at center
-                   generateGridPoints(newPoints); // Reset "new" to center
-                   // We treat this frame as a "jump" so we don't move the camera this specific frame
-                   // to avoid jerky resetting
-                } else {
-                    // Apply movement to Three.js Camera
-                    // Average the delta
-                    let avgDx = deltaX / pointsFound;
-                    let avgDy = deltaY / pointsFound;
-
-                    // Invert controls: Camera moves left (image features move right), we want to look left.
-                    // Usually: Image moves Right -> Camera turned Left.
-                    // Prompt: "camera feed moves to left move the image also to left"
-                    // If I pan phone left, pixels in video move RIGHT.
-                    // So if pixels move Right (+x), we rotate camera Left.
-                    
-                    camera.rotation.y += avgDx * sensitivity * 0.1; 
-                    camera.rotation.x += avgDy * sensitivity * 0.1;
-                }
-
-                // Swap frames and points for next iteration
-                frameGray.copyTo(oldGray);
-                newPoints.copyTo(oldPoints);
-                frame.delete();
-
-                requestAnimationFrame(processVideo);
-
-            } catch (err) {
-                logError("Tracking Error: " + err);
-            }
-        }
-
-        requestAnimationFrame(processVideo);
+        generateGrid(oldPoints, width, height);
+        isTracking = true;
+        processVideo();
     }
 
-    // Helper to generate the 9 points grid (3x3) in center of video
-    function generateGridPoints(mat) {
-        // Video is 320x240
-        // Center is 160, 120
-        // We want a grid. Let's space them 30px apart.
-        const centerX = 160;
-        const centerY = 120;
-        const spacing = 40;
+    function generateGrid(pointMat, w, h) {
+        // Create 3x3 grid centered in the frame
+        // This makes 9 points
+        let points = [];
+        let stepX = 40; 
+        let stepY = 40;
+        let centerX = w / 2;
+        let centerY = h / 2;
 
-        let index = 0;
         for(let x = -1; x <= 1; x++) {
             for(let y = -1; y <= 1; y++) {
-                mat.data32F[index * 2] = centerX + (x * spacing);
-                mat.data32F[index * 2 + 1] = centerY + (y * spacing);
-                index++;
+                points.push(centerX + x * stepX);
+                points.push(centerY + y * stepY);
             }
+        }
+
+        // Resize mat to hold 9 points (float32, 2 channels)
+        pointMat.create(9, 1, cv.CV_32FC2);
+        for (let i = 0; i < 9; i++) {
+            pointMat.data32F[i * 2] = points[i * 2];
+            pointMat.data32F[i * 2 + 1] = points[i * 2 + 1];
         }
     }
 
+    function processVideo() {
+        if (!isTracking) return;
+
+        try {
+            let begin = Date.now();
+
+            // 1. Read new frame
+            let frame = new cv.Mat(videoElement.videoHeight, videoElement.videoWidth, cv.CV_8UC4);
+            cap.read(frame);
+            cv.cvtColor(frame, frameGray, cv.COLOR_RGBA2GRAY);
+
+            // 2. Calc Optical Flow
+            if(oldPoints.rows > 0) {
+                cv.calcOpticalFlowPyrLK(oldGray, frameGray, oldPoints, newPoints, statusMat, errMat, winSize, maxLevel, criteria);
+            }
+
+            // 3. Visualize & Calculate Movement
+            debugCtx.clearRect(0, 0, debugCanvas.width, debugCanvas.height);
+            
+            let deltaX = 0, deltaY = 0, goodPoints = 0;
+            let resetNeeded = false;
+            let w = videoElement.videoWidth;
+            let h = videoElement.videoHeight;
+
+            // Loop through the 9 points
+            for (let i = 0; i < statusMat.rows; i++) {
+                if (statusMat.data[i] === 1) {
+                    let x = newPoints.data32F[i * 2];
+                    let y = newPoints.data32F[i * 2 + 1];
+                    let oldX = oldPoints.data32F[i * 2];
+                    let oldY = oldPoints.data32F[i * 2 + 1];
+
+                    // Draw the 12x12 grid (box)
+                    debugCtx.strokeStyle = "lime";
+                    debugCtx.lineWidth = 2;
+                    debugCtx.strokeRect(x - 6, y - 6, 12, 12);
+
+                    deltaX += (x - oldX);
+                    deltaY += (y - oldY);
+                    goodPoints++;
+
+                    // Check bounds (reset if going off screen)
+                    if (x < 10 || x > w - 10 || y < 10 || y > h - 10) {
+                        resetNeeded = true;
+                    }
+                }
+            }
+
+            // 4. Update Camera or Reset Grid
+            if (goodPoints < 4 || resetNeeded) {
+                // Not enough points or moved too far -> Reset grid to center
+                generateGrid(newPoints, w, h);
+                debugCtx.strokeStyle = "red";
+                debugCtx.strokeRect(w/2 - 20, h/2 - 20, 40, 40); // Flash red center
+            } else {
+                let avgX = deltaX / goodPoints;
+                let avgY = deltaY / goodPoints;
+
+                // Move 360 Camera
+                // Note: If video pixels move RIGHT, camera is panning LEFT.
+                // We rotate the 3D camera in the opposite direction of pixel flow to mimic head movement.
+                camera.rotation.y += avgX * SENSITIVITY; 
+                camera.rotation.x += avgY * SENSITIVITY;
+            }
+
+            // 5. Cleanup for next frame
+            frameGray.copyTo(oldGray);
+            newPoints.copyTo(oldPoints);
+            frame.delete();
+
+            requestAnimationFrame(processVideo);
+
+        } catch (err) {
+            logMsg("Tracking Loop Error: " + err, true);
+        }
+    }
 </script>
 </body>
 </html>
