@@ -3,61 +3,66 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>360 Viewer + Visual Tracking</title>
+    <title>360 Cam Color Tracker</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #111; font-family: sans-serif; }
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: sans-serif; }
         
-        /* 360 View Container */
+        /* 360 View Background */
         #canvas-container { 
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; 
         }
 
-        /* Camera Preview Area (Half Screen) */
-        #camera-wrapper {
+        /* Camera Preview - Bottom Right Corner */
+        #camera-ui {
             position: absolute; 
-            bottom: 0; left: 0; 
-            width: 100%; height: 50%; /* Half screen height */
-            z-index: 10;
-            background: rgba(0,0,0,0.5);
-            display: none; /* Hidden until camera starts */
-            pointer-events: none; /* Let touches pass through */
+            bottom: 20px; right: 20px; 
+            width: 240px; height: 180px;
+            z-index: 100;
+            border: 2px solid white;
+            background: #000;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
         }
-        
+
         #input-video {
-            width: 100%; height: 100%; 
-            object-fit: cover; 
-            opacity: 0.8;
-        }
-
-        /* Overlay canvas for drawing the tracking grids */
-        #debug-canvas {
-            position: absolute; top: 0; left: 0; 
-            width: 100%; height: 100%;
-        }
-
-        /* UI / Messages */
-        #ui-layer {
-            position: absolute; top: 10px; left: 10px; z-index: 20;
-            color: lime; text-shadow: 1px 1px 2px black; font-size: 14px;
-            pointer-events: none;
-        }
-
-        .error-msg { 
-            color: #ff4444; background: rgba(0,0,0,0.8); 
-            padding: 8px; margin-top: 5px; border-left: 3px solid red;
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            object-fit: cover; opacity: 0; /* Hide raw video, show canvas instead */
         }
         
-        .status-msg { background: rgba(0,0,0,0.6); padding: 5px; border-radius: 4px; }
-
-        /* Start Button */
-        #start-btn {
-            position: absolute; top: 50%; left: 50%; 
-            transform: translate(-50%, -50%);
-            z-index: 30; padding: 20px 40px; font-size: 20px;
-            background: #28a745; color: white; border: none; 
-            cursor: pointer; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        #output-canvas {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
         }
+
+        /* UI Controls */
+        #ui-layer {
+            position: absolute; top: 20px; left: 20px; z-index: 101;
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.9);
+            border: none; padding: 10px 20px; margin-bottom: 10px;
+            font-size: 16px; font-weight: bold; cursor: pointer;
+            display: block; border-radius: 4px;
+        }
+        
+        .status {
+            color: lime; background: rgba(0,0,0,0.7); 
+            padding: 5px 10px; margin-bottom: 10px; display: inline-block;
+        }
+
+        #start-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); z-index: 200;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+        }
+        
+        #start-btn {
+            padding: 20px 40px; font-size: 24px; background: #007bff; color: white;
+            border: none; border-radius: 8px; cursor: pointer;
+        }
+
+        .instruction { color: #ccc; margin-top: 20px; font-size: 14px; max-width: 300px; text-align: center; }
     </style>
+    
     <!-- Three.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <!-- OpenCV.js -->
@@ -65,65 +70,90 @@
 </head>
 <body>
 
-    <div id="ui-layer">
-        <div id="status" class="status-msg">Initializing System...</div>
-        <div id="errors"></div>
-        <div id="tracking-info"></div>
+    <!-- Start Screen -->
+    <div id="start-overlay">
+        <div id="loading-msg" style="color:white; font-size:20px;">Loading OpenCV Library...</div>
+        <button id="start-btn" onclick="startSystem()" style="display:none;">START CAMERA</button>
+        <div class="instruction">
+            1. Allow Camera Access.<br>
+            2. Hold a bright <b>RED</b> object in front of the camera.<br>
+            3. Move the object left/right/up/down to rotate the view.
+        </div>
     </div>
 
-    <button id="start-btn" onclick="startExperience()">TAP TO START</button>
+    <!-- UI Controls -->
+    <div id="ui-layer">
+        <div class="status" id="status-text">Status: Waiting...</div>
+        <button class="btn" style="color:red; border-left: 5px solid red;" onclick="setTrackingColor('red')">Track RED</button>
+        <button class="btn" style="color:blue; border-left: 5px solid blue;" onclick="setTrackingColor('blue')">Track BLUE</button>
+        <button class="btn" style="color:green; border-left: 5px solid green;" onclick="setTrackingColor('green')">Track GREEN</button>
+    </div>
 
+    <!-- 360 View -->
     <div id="canvas-container"></div>
 
-    <!-- Container for Video + Visual Debugging -->
-    <div id="camera-wrapper">
+    <!-- Camera Preview & Tracking -->
+    <div id="camera-ui">
         <video id="input-video" playsinline muted autoplay></video>
-        <canvas id="debug-canvas"></canvas>
+        <canvas id="output-canvas"></canvas>
     </div>
 
 <script>
-    // --- Configuration ---
-    const IMAGE_URL = 'https://c1.wallpaperflare.com/preview/926/262/443/astrophotography-death-valley-national-park-photo-nevada.jpg';
-    const TRACKING_GRID_SIZE = 12; // 12x12 pixel grids
-    const SENSITIVITY = 0.08;      // Rotation speed
+    // --- Config ---
+    const IMG_URL = 'https://c1.wallpaperflare.com/preview/926/262/443/astrophotography-death-valley-national-park-photo-nevada.jpg';
     
-    // --- Global Variables ---
+    // --- Globals ---
     let camera, scene, renderer, sphere;
+    let video = document.getElementById('input-video');
+    let canvas = document.getElementById('output-canvas');
+    let ctx = canvas.getContext('2d');
+    let streaming = false;
     let cvReady = false;
-    let isTracking = false;
-    let videoElement = document.getElementById('input-video');
-    let debugCanvas = document.getElementById('debug-canvas');
-    let debugCtx = debugCanvas.getContext('2d');
 
-    // OpenCV Variables
-    let cap, oldFrame, oldGray, frameGray, oldPoints, newPoints, statusMat, errMat;
-    let winSize, maxLevel, criteria;
+    // Tracking Globals
+    let cap, src, dst, hsv, mask, contours, hierarchy;
+    let low, high; // Color ranges
+    let activeColor = 'red';
 
-    function logMsg(msg, isError = false) {
-        const el = document.getElementById(isError ? 'errors' : 'status');
-        if(isError) {
-            const d = document.createElement('div');
-            d.className = 'error-msg';
-            d.innerText = msg;
-            el.appendChild(d);
-            console.error(msg);
-        } else {
-            el.innerText = msg;
-            console.log(msg);
+    // --- 1. System Init ---
+    function onOpenCvReady() {
+        cvReady = true;
+        document.getElementById('loading-msg').style.display = 'none';
+        document.getElementById('start-btn').style.display = 'block';
+    }
+
+    async function startSystem() {
+        document.getElementById('start-overlay').style.display = 'none';
+        
+        // 1. Start Three.js
+        initThreeJS();
+
+        // 2. Start Camera
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: 'environment', width: 320, height: 240 }, 
+                audio: false 
+            });
+            video.srcObject = stream;
+            video.play();
+            
+            video.onloadedmetadata = () => {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                streaming = true;
+                initTracking(); // Start OpenCV loop
+            };
+        } catch (err) {
+            alert("Camera Error: " + err.message + "\nEnsure you are using HTTPS.");
         }
     }
 
-    function onOpenCvReady() {
-        cvReady = true;
-        logMsg("System Ready. Waiting for user input.");
-    }
-
-    // --- 1. Three.js Initialization ---
+    // --- 2. Three.js Logic ---
     function initThreeJS() {
         const container = document.getElementById('canvas-container');
         scene = new THREE.Scene();
         camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.scale.x = -1; // Invert for inside view
+        camera.scale.x = -1; // Invert sphere
 
         renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -133,14 +163,13 @@
         const loader = new THREE.TextureLoader();
         loader.crossOrigin = "anonymous";
         
-        loader.load(IMAGE_URL, (texture) => {
+        loader.load(IMG_URL, (texture) => {
             const material = new THREE.MeshBasicMaterial({ map: texture });
             sphere = new THREE.Mesh(geometry, material);
             scene.add(sphere);
-        }, undefined, (err) => {
-            logMsg("Error loading image. Check CORS or URL.", true);
         });
 
+        // Window Resize
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
@@ -155,229 +184,150 @@
         renderer.render(scene, camera);
     }
 
-    // --- 2. Main Logic ---
-    async function startExperience() {
-        document.getElementById('start-btn').style.display = 'none';
+    // --- 3. Tracking Logic (OpenCV) ---
+    function setTrackingColor(color) {
+        activeColor = color;
+        document.getElementById('status-text').innerText = "Tracking: " + color.toUpperCase();
         
-        // Security Check
-        if (!window.isSecureContext) {
-            logMsg("CRITICAL ERROR: Not running in Secure Context (HTTPS/localhost). Camera access will fail.", true);
-        }
-
-        initThreeJS();
-
-        // Try Gyroscope First
-        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-            try {
-                const response = await DeviceOrientationEvent.requestPermission();
-                if (response === 'granted') {
-                    setupGyro();
-                } else {
-                    logMsg("Gyro permission denied. Starting Camera...", true);
-                    setupCamera();
-                }
-            } catch (e) {
-                logMsg("Gyro Error: " + e, true);
-                setupCamera();
-            }
-        } else {
-            // Android/Desktop or non-permission iOS
-            window.addEventListener('deviceorientation', handleGyro);
-            // Wait 1s to see if we actually get data. If not, start camera.
-            setTimeout(() => {
-                if (!gyroDataReceived) {
-                    logMsg("No Gyro data detected. Falling back to Camera...");
-                    window.removeEventListener('deviceorientation', handleGyro);
-                    setupCamera();
-                }
-            }, 1000);
+        // Update HSV ranges based on selection
+        if(src) { // Only if opencv initialized
+            updateColorRange();
         }
     }
 
-    // --- 3. Gyroscope Logic ---
-    let gyroDataReceived = false;
-    function setupGyro() {
-        window.addEventListener('deviceorientation', handleGyro);
-    }
-
-    function handleGyro(event) {
-        if (event.alpha === null || event.beta === null) return;
-        gyroDataReceived = true;
-        logMsg("Mode: Gyroscope Control");
-
-        // Simple mapping
-        const lat = Math.max(-85, Math.min(85, 90 - event.beta));
-        const lon = event.alpha || 0;
-        const phi = THREE.Math.degToRad(90 - lat);
-        const theta = THREE.Math.degToRad(lon);
-
-        const targetX = 500 * Math.sin(phi) * Math.cos(theta);
-        const targetY = 500 * Math.cos(phi);
-        const targetZ = 500 * Math.sin(phi) * Math.sin(theta);
-        camera.lookAt(targetX, targetY, targetZ);
-    }
-
-    // --- 4. Camera & Visual Tracking Logic ---
-    function setupCamera() {
-        if (!cvReady) {
-            logMsg("OpenCV not ready. Refresh page.", true);
-            return;
+    function updateColorRange() {
+        // HSV Ranges (OpenCV scales: H: 0-179, S: 0-255, V: 0-255)
+        if (activeColor === 'red') {
+            // Red wraps around 0/180. We'll use the lower range 0-10 and upper 170-180 usually, 
+            // but a broad 0-15 works well for bright red objects.
+            low = new cv.Mat(src.rows, src.cols, src.type(), [0, 100, 100, 0]);
+            high = new cv.Mat(src.rows, src.cols, src.type(), [10, 255, 255, 255]);
+        } else if (activeColor === 'blue') {
+            low = new cv.Mat(src.rows, src.cols, src.type(), [100, 100, 50, 0]);
+            high = new cv.Mat(src.rows, src.cols, src.type(), [130, 255, 255, 255]);
+        } else if (activeColor === 'green') {
+            low = new cv.Mat(src.rows, src.cols, src.type(), [40, 100, 50, 0]);
+            high = new cv.Mat(src.rows, src.cols, src.type(), [80, 255, 255, 255]);
         }
-
-        document.getElementById('camera-wrapper').style.display = 'block';
-        logMsg("Mode: Optical Flow Tracking (Camera)");
-
-        const constraints = {
-            video: {
-                facingMode: 'environment', // Rear camera
-                width: { ideal: 320 },
-                height: { ideal: 240 }
-            }
-        };
-
-        navigator.mediaDevices.getUserMedia(constraints)
-            .then((stream) => {
-                videoElement.srcObject = stream;
-                videoElement.play();
-                videoElement.onloadedmetadata = () => {
-                    // Match canvas size to video render size
-                    debugCanvas.width = videoElement.videoWidth;
-                    debugCanvas.height = videoElement.videoHeight;
-                    initTracking();
-                };
-            })
-            .catch((err) => {
-                logMsg("Camera Access Denied: " + err.message, true);
-                logMsg("Ensure you are on HTTPS and allowed permissions.", true);
-            });
     }
 
     function initTracking() {
-        const width = videoElement.videoWidth;
-        const height = videoElement.videoHeight;
-
-        // Init OpenCV Mats
-        cap = new cv.VideoCapture(videoElement);
-        oldFrame = new cv.Mat(height, width, cv.CV_8UC4);
-        oldGray = new cv.Mat();
-        frameGray = new cv.Mat();
-        oldPoints = new cv.Mat();
-        newPoints = new cv.Mat();
-        statusMat = new cv.Mat();
-        errMat = new cv.Mat();
-
-        // Read first frame
-        cap.read(oldFrame);
-        cv.cvtColor(oldFrame, oldGray, cv.COLOR_RGBA2GRAY);
-
-        // Parameters for Lucas-Kanade
-        winSize = new cv.Size(TRACKING_GRID_SIZE, TRACKING_GRID_SIZE);
-        maxLevel = 2;
-        criteria = new cv.TermCriteria(cv.TermCriteria_EPS | cv.TermCriteria_COUNT, 10, 0.03);
-
-        generateGrid(oldPoints, width, height);
-        isTracking = true;
-        processVideo();
+        // Initialize Mats
+        src = new cv.Mat(video.videoHeight, video.videoWidth, cv.CV_8UC4);
+        dst = new cv.Mat(video.videoHeight, video.videoWidth, cv.CV_8UC4);
+        hsv = new cv.Mat();
+        mask = new cv.Mat();
+        contours = new cv.MatVector();
+        hierarchy = new cv.Mat();
+        
+        // Set initial color
+        updateColorRange();
+        
+        processFrame();
     }
 
-    function generateGrid(pointMat, w, h) {
-        // Create 3x3 grid centered in the frame
-        // This makes 9 points
-        let points = [];
-        let stepX = 40; 
-        let stepY = 40;
-        let centerX = w / 2;
-        let centerY = h / 2;
-
-        for(let x = -1; x <= 1; x++) {
-            for(let y = -1; y <= 1; y++) {
-                points.push(centerX + x * stepX);
-                points.push(centerY + y * stepY);
-            }
-        }
-
-        // Resize mat to hold 9 points (float32, 2 channels)
-        pointMat.create(9, 1, cv.CV_32FC2);
-        for (let i = 0; i < 9; i++) {
-            pointMat.data32F[i * 2] = points[i * 2];
-            pointMat.data32F[i * 2 + 1] = points[i * 2 + 1];
-        }
-    }
-
-    function processVideo() {
-        if (!isTracking) return;
+    function processFrame() {
+        if (!streaming) return;
 
         try {
             let begin = Date.now();
 
-            // 1. Read new frame
-            let frame = new cv.Mat(videoElement.videoHeight, videoElement.videoWidth, cv.CV_8UC4);
-            cap.read(frame);
-            cv.cvtColor(frame, frameGray, cv.COLOR_RGBA2GRAY);
+            // 1. Read Video
+            let cap = new cv.VideoCapture(video);
+            cap.read(src);
 
-            // 2. Calc Optical Flow
-            if(oldPoints.rows > 0) {
-                cv.calcOpticalFlowPyrLK(oldGray, frameGray, oldPoints, newPoints, statusMat, errMat, winSize, maxLevel, criteria);
-            }
+            // 2. Convert to HSV
+            cv.cvtColor(src, hsv, cv.COLOR_RGBA2RGB); // Ensure 3 channels
+            cv.cvtColor(hsv, hsv, cv.COLOR_RGB2HSV);
 
-            // 3. Visualize & Calculate Movement
-            debugCtx.clearRect(0, 0, debugCanvas.width, debugCanvas.height);
-            
-            let deltaX = 0, deltaY = 0, goodPoints = 0;
-            let resetNeeded = false;
-            let w = videoElement.videoWidth;
-            let h = videoElement.videoHeight;
+            // 3. Create Mask (Thresholding)
+            cv.inRange(hsv, low, high, mask);
 
-            // Loop through the 9 points
-            for (let i = 0; i < statusMat.rows; i++) {
-                if (statusMat.data[i] === 1) {
-                    let x = newPoints.data32F[i * 2];
-                    let y = newPoints.data32F[i * 2 + 1];
-                    let oldX = oldPoints.data32F[i * 2];
-                    let oldY = oldPoints.data32F[i * 2 + 1];
+            // 4. Morphological opening (remove noise)
+            let M = cv.Mat.ones(5, 5, cv.CV_8U);
+            cv.erode(mask, mask, M);
+            cv.dilate(mask, mask, M);
 
-                    // Draw the 12x12 grid (box)
-                    debugCtx.strokeStyle = "lime";
-                    debugCtx.lineWidth = 2;
-                    debugCtx.strokeRect(x - 6, y - 6, 12, 12);
+            // 5. Find Contours
+            cv.findContours(mask, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
 
-                    deltaX += (x - oldX);
-                    deltaY += (y - oldY);
-                    goodPoints++;
+            // 6. Find Largest Contour (The Object)
+            let maxArea = 0;
+            let maxCnt = null;
 
-                    // Check bounds (reset if going off screen)
-                    if (x < 10 || x > w - 10 || y < 10 || y > h - 10) {
-                        resetNeeded = true;
+            for (let i = 0; i < contours.size(); ++i) {
+                let cnt = contours.get(i);
+                let area = cv.contourArea(cnt);
+                if (area > 500) { // Minimum size filter
+                    if (area > maxArea) {
+                        maxArea = area;
+                        maxCnt = cnt;
                     }
                 }
             }
 
-            // 4. Update Camera or Reset Grid
-            if (goodPoints < 4 || resetNeeded) {
-                // Not enough points or moved too far -> Reset grid to center
-                generateGrid(newPoints, w, h);
-                debugCtx.strokeStyle = "red";
-                debugCtx.strokeRect(w/2 - 20, h/2 - 20, 40, 40); // Flash red center
-            } else {
-                let avgX = deltaX / goodPoints;
-                let avgY = deltaY / goodPoints;
+            // 7. Draw Visuals & Move Camera
+            // Clear canvas first
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height); // Draw background video
 
-                // Move 360 Camera
-                // Note: If video pixels move RIGHT, camera is panning LEFT.
-                // We rotate the 3D camera in the opposite direction of pixel flow to mimic head movement.
-                camera.rotation.y += avgX * SENSITIVITY; 
-                camera.rotation.x += avgY * SENSITIVITY;
+            if (maxCnt) {
+                // Get bounding rect
+                let rect = cv.boundingRect(maxCnt);
+                
+                // Draw Rectangle (Visual Feedback)
+                ctx.strokeStyle = activeColor;
+                ctx.lineWidth = 4;
+                ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
+                
+                // Draw Center Dot
+                let centerX = rect.x + rect.width / 2;
+                let centerY = rect.y + rect.height / 2;
+                ctx.fillStyle = "white";
+                ctx.fillRect(centerX - 5, centerY - 5, 10, 10);
+
+                // --- CAMERA MOVEMENT LOGIC ---
+                // Calculate distance from center of screen
+                let screenCenterX = canvas.width / 2;
+                let screenCenterY = canvas.height / 2;
+
+                // Dead zone (10% of screen) where camera doesn't move
+                let deadZone = 30; 
+
+                let diffX = centerX - screenCenterX;
+                let diffY = centerY - screenCenterY;
+
+                // Move 3D Camera
+                // Sensitivity
+                const SENSITIVITY = 0.0005; 
+
+                if (Math.abs(diffX) > deadZone) {
+                    camera.rotation.y -= diffX * SENSITIVITY;
+                }
+                if (Math.abs(diffY) > deadZone) {
+                    camera.rotation.x -= diffY * SENSITIVITY;
+                }
+            } else {
+                // No object found
+                ctx.fillStyle = "white";
+                ctx.font = "20px Arial";
+                ctx.fillText("Looking for " + activeColor + "...", 10, 30);
             }
 
-            // 5. Cleanup for next frame
-            frameGray.copyTo(oldGray);
-            newPoints.copyTo(oldPoints);
-            frame.delete();
+            // Cleanup
+            M.delete();
+            // Important: Don't delete src/dst/hsv/mask here, we reuse them.
+            // But we must clear contours for next frame
+            // In C++ opencv contours are vectors, in JS we usually delete and re-init or just let them be overwritten.
+            // Safe approach in JS loop:
+            contours.delete(); 
+            contours = new cv.MatVector(); 
 
-            requestAnimationFrame(processVideo);
+            // Schedule next frame
+            requestAnimationFrame(processFrame);
 
         } catch (err) {
-            logMsg("Tracking Loop Error: " + err, true);
+            console.error(err);
         }
     }
 </script>
