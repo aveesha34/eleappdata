@@ -2,130 +2,202 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Hardware Stabilized Camera</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>POV Globe - Accel to Gyro</title>
     <style>
-        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
-        
-        /* The Viewport clips the overflow of the stabilized video */
-        #viewport {
-            position: relative;
-            width: 100vw;
-            height: 100vh;
-            overflow: hidden;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
+        canvas { display: block; }
 
-        /* 1.3x zoom provides the 'buffer' needed to move the image without seeing edges */
-        video {
-            min-width: 100%;
-            min-height: 100%;
-            object-fit: cover;
-            transform: scale(1.3); 
-            will-change: transform;
-        }
-
-        #ui {
+        #hud {
             position: absolute;
-            top: 10px; left: 10px;
-            color: #0f0; background: rgba(0,0,0,0.7);
-            padding: 10px; border-radius: 5px; font-size: 12px;
-            z-index: 10; pointer-events: none;
+            top: 20px; left: 20px;
+            color: #00ffcc;
+            text-shadow: 0 0 5px #000;
+            pointer-events: none;
         }
 
-        button {
+        #menu {
             position: absolute;
             bottom: 30px; left: 50%;
             transform: translateX(-50%);
-            padding: 15px 30px;
-            background: #fff; border: none;
-            border-radius: 50px; font-weight: bold;
-            z-index: 20; cursor: pointer;
+            display: flex; gap: 10px;
+            z-index: 100;
+        }
+
+        button {
+            background: rgba(0, 255, 204, 0.2);
+            color: #00ffcc;
+            border: 1px solid #00ffcc;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            backdrop-filter: blur(5px);
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+
+        button.active {
+            background: #00ffcc;
+            color: #000;
+        }
+
+        #overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 1000; color: white; text-align: center;
         }
     </style>
 </head>
 <body>
 
-    <div id="viewport">
-        <video id="cam" autoplay playsinline></video>
+    <div id="overlay">
+        <div>
+            <h1>POV GLOBE</h1>
+            <p>Simulating Gyroscope via Accelerometer</p>
+            <button id="startBtn" style="font-size: 20px; padding: 20px 40px;">ENTER GLOBE</button>
+        </div>
     </div>
 
-    <div id="ui">
-        <b>STABILIZER ACTIVE (ACCEL ONLY)</b><br>
-        X-Offset: <span id="ox">0</span><br>
-        Y-Offset: <span id="oy">0</span><br>
-        Z-Force: <span id="oz">0</span>
+    <div id="hud">
+        MODE: <span id="modeDisplay">High Quality</span><br>
+        PITCH: <span id="pitch">0</span>°<br>
+        ROLL: <span id="roll">0</span>°
     </div>
 
-    <button id="start">START STABILIZATION</button>
+    <div id="menu">
+        <button onclick="setPreset('gyro')">Real Gyro-Like</button>
+        <button onclick="setPreset('precise')">Precise</button>
+        <button class="active" onclick="setPreset('hq')">High Quality</button>
+    </div>
 
-<script>
-    const video = document.getElementById('cam');
-    const startBtn = document.getElementById('start');
-    
-    // Stabilization variables
-    let baselineX = 0, baselineY = 0;
-    let smoothX = 0, smoothY = 0;
-    
-    // Hyper-parameters for "Professional" feel
-    const STRENGTH = 12;      // How aggressively to counter the shake
-    const SMOOTHING = 0.08;   // How fast the camera returns to center (0.01 - 0.1)
-    const MAX_SHIFT = 60;     // Max pixels to move (prevents "jumping")
+    <!-- Loading Three.js from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
-    async function start() {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: 'environment', frameRate: { ideal: 60 } } 
+    <script>
+        let scene, camera, renderer, globe;
+        let currentPitch = 0, currentRoll = 0;
+        let targetPitch = 0, targetRoll = 0;
+        
+        // Physics Presets
+        const presets = {
+            gyro: { smoothing: 0.2, sensitivity: 1.5, noiseFilter: 0.01 },
+            precise: { smoothing: 0.05, sensitivity: 1.0, noiseFilter: 0.05 },
+            hq: { smoothing: 0.08, sensitivity: 1.2, noiseFilter: 0.02 }
+        };
+        let activePreset = presets.hq;
+
+        function init3D() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            // Create the "Globe" environment
+            // We use a large sphere and render the inside
+            const geometry = new THREE.SphereGeometry(50, 64, 64);
+            const material = new THREE.MeshBasicMaterial({
+                color: 0x111111,
+                side: THREE.BackSide,
+                wireframe: true // Makes it look like a digital globe
             });
-            video.srcObject = stream;
+            globe = new THREE.Mesh(geometry, material);
+            scene.add(globe);
 
-            if (typeof DeviceMotionEvent.requestPermission === 'function') {
-                const res = await DeviceMotionEvent.requestPermission();
-                if (res === 'granted') window.addEventListener('devicemotion', stabilize);
-            } else {
-                window.addEventListener('devicemotion', stabilize);
+            // Add "Dots" (Stars/Particles)
+            const dotGeometry = new THREE.BufferGeometry();
+            const dotCoords = [];
+            for (let i = 0; i < 2000; i++) {
+                dotCoords.push((Math.random() - 0.5) * 80);
+                dotCoords.push((Math.random() - 0.5) * 80);
+                dotCoords.push((Math.random() - 0.5) * 80);
             }
-            startBtn.style.display = 'none';
-        } catch (e) { alert("Camera/Sensor access required."); }
-    }
+            dotGeometry.setAttribute('position', new THREE.Float32BufferAttribute(dotCoords, 3));
+            const dotMaterial = new THREE.PointsMaterial({ color: 0x00ffcc, size: 0.2 });
+            const dots = new THREE.Points(dotGeometry, dotMaterial);
+            scene.add(dots);
 
-    function stabilize(event) {
-        const acc = event.accelerationIncludingGravity;
-        if (!acc) return;
+            // Add some floating shapes for depth
+            const boxGeo = new THREE.BoxGeometry(2, 2, 2);
+            for(let i=0; i<20; i++) {
+                const mesh = new THREE.Mesh(boxGeo, new THREE.MeshBasicMaterial({color: 0x00ffcc, wireframe: true}));
+                mesh.position.set((Math.random()-0.5)*40, (Math.random()-0.5)*40, (Math.random()-0.5)*40);
+                scene.add(mesh);
+            }
 
-        // 1. Update the 'Baseline' (the slow-moving gravity vector)
-        // This represents where the phone "wants" to be.
-        baselineX = (baselineX * 0.95) + (acc.x * 0.05);
-        baselineY = (baselineY * 0.95) + (acc.y * 0.05);
+            animate();
+        }
 
-        // 2. Calculate the 'Jitter' (Current - Baseline)
-        // If jitter is positive, the phone jerked one way; we move the video the other way.
-        let deltaX = (acc.x - baselineX) * STRENGTH;
-        let deltaY = (acc.y - baselineY) * STRENGTH;
+        function animate() {
+            requestAnimationFrame(animate);
 
-        // 3. Smooth the counter-movement (Low Pass Filter)
-        // This prevents the stabilization itself from looking shaky.
-        smoothX += (deltaX - smoothX) * SMOOTHING;
-        smoothY += (deltaY - smoothY) * SMOOTHING;
+            // Smooth Interpolation (The "Stabilization" logic)
+            currentPitch += (targetPitch - currentPitch) * activePreset.smoothing;
+            currentRoll += (targetRoll - currentRoll) * activePreset.smoothing;
 
-        // 4. Constraints
-        smoothX = Math.max(-MAX_SHIFT, Math.min(MAX_SHIFT, smoothX));
-        smoothY = Math.max(-MAX_SHIFT, Math.min(MAX_SHIFT, smoothY));
+            // Apply rotation to the camera to simulate looking around
+            camera.rotation.set(currentPitch, currentRoll, 0, 'YXZ');
 
-        // 5. Apply the Inverse Transform
-        // We use translate3d for GPU acceleration. 
-        // We move +X if the phone moves -X to stay "fixed" in space.
-        video.style.transform = `scale(1.3) translate3d(${smoothX.toFixed(2)}px, ${-smoothY.toFixed(2)}px, 0)`;
+            renderer.render(scene, camera);
+        }
 
-        // Update Logs
-        document.getElementById('ox').innerText = Math.round(smoothX);
-        document.getElementById('oy').innerText = Math.round(-smoothY);
-        document.getElementById('oz').innerText = acc.z.toFixed(2);
-    }
+        function handleMotion(event) {
+            const acc = event.accelerationIncludingGravity;
+            if (!acc) return;
 
-    startBtn.onclick = start;
-</script>
+            // PRECISE CALCULATION: 
+            // Converting Accelerometer Gravity Vectors to Euler Angles (Pitch/Roll)
+            // Math.atan2 helps determine the angle of the device relative to the ground
+            
+            let x = acc.x;
+            let y = acc.y;
+            let z = acc.z;
+
+            // Calculate Roll (Left/Right tilt)
+            let roll = Math.atan2(x, z);
+            
+            // Calculate Pitch (Up/Down tilt)
+            let pitch = Math.atan2(-y, Math.sqrt(x * x + z * z));
+
+            // Noise Filtering: Ignore tiny vibrations
+            if (Math.abs(roll) < activePreset.noiseFilter) roll = 0;
+            if (Math.abs(pitch) < activePreset.noiseFilter) pitch = 0;
+
+            targetRoll = roll * activePreset.sensitivity;
+            targetPitch = pitch * activePreset.sensitivity;
+
+            // Update HUD
+            document.getElementById('pitch').innerText = (targetPitch * (180/Math.PI)).toFixed(1);
+            document.getElementById('roll').innerText = (targetRoll * (180/Math.PI)).toFixed(1);
+        }
+
+        function setPreset(p) {
+            activePreset = presets[p];
+            document.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById('modeDisplay').innerText = event.target.innerText;
+        }
+
+        document.getElementById('startBtn').addEventListener('click', async () => {
+            if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                const permission = await DeviceMotionEvent.requestPermission();
+                if (permission === 'granted') {
+                    window.addEventListener('devicemotion', handleMotion);
+                }
+            } else {
+                window.addEventListener('devicemotion', handleMotion);
+            }
+            document.getElementById('overlay').style.display = 'none';
+            init3D();
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
 </body>
 </html>
