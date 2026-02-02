@@ -3,18 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Accelerometer Camera Stabilizer</title>
+    <title>Hardware Stabilized Camera</title>
     <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background: #000;
-            font-family: monospace;
-            overflow: hidden;
-            color: #0f0;
-        }
-
-        /* The container clips the edges of the scaled video */
+        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
+        
+        /* The Viewport clips the overflow of the stabilized video */
         #viewport {
             position: relative;
             width: 100vw;
@@ -25,146 +18,114 @@
             justify-content: center;
         }
 
-        /* We scale the video so there's room to move it around for stabilization */
+        /* 1.3x zoom provides the 'buffer' needed to move the image without seeing edges */
         video {
             min-width: 100%;
             min-height: 100%;
             object-fit: cover;
-            transform: scale(1.2); /* Buffer for stabilization */
-            transition: transform 0.1s linear; /* Smooths the movement */
+            transform: scale(1.3); 
+            will-change: transform;
         }
 
-        #overlay {
+        #ui {
             position: absolute;
-            top: 20px;
-            left: 20px;
-            background: rgba(0, 0, 0, 0.6);
-            padding: 15px;
-            border-radius: 8px;
-            pointer-events: none;
-            z-index: 10;
-        }
-
-        #controls {
-            position: absolute;
-            bottom: 40px;
-            width: 100%;
-            text-align: center;
-            z-index: 20;
+            top: 10px; left: 10px;
+            color: #0f0; background: rgba(0,0,0,0.7);
+            padding: 10px; border-radius: 5px; font-size: 12px;
+            z-index: 10; pointer-events: none;
         }
 
         button {
-            background: #0f0;
-            color: #000;
-            border: none;
+            position: absolute;
+            bottom: 30px; left: 50%;
+            transform: translateX(-50%);
             padding: 15px 30px;
-            font-size: 16px;
-            font-weight: bold;
-            border-radius: 50px;
-            cursor: pointer;
+            background: #fff; border: none;
+            border-radius: 50px; font-weight: bold;
+            z-index: 20; cursor: pointer;
         }
     </style>
 </head>
 <body>
 
     <div id="viewport">
-        <video id="cameraPreview" autoplay playsinline></video>
-        
-        <div id="overlay">
-            <strong>Accelerometer Logs (m/s²)</strong><br>
-            X: <span id="valX">0.00</span><br>
-            Y: <span id="valY">0.00</span><br>
-            Z: <span id="valZ">0.00</span>
-            <hr>
-            <strong>Stabilization Offset</strong><br>
-            Shift X: <span id="offsetX">0</span>px<br>
-            Shift Y: <span id="offsetY">0</span>px
-        </div>
+        <video id="cam" autoplay playsinline></video>
     </div>
 
-    <div id="controls">
-        <button id="startBtn">Enable Stabilized Camera</button>
+    <div id="ui">
+        <b>STABILIZER ACTIVE (ACCEL ONLY)</b><br>
+        X-Offset: <span id="ox">0</span><br>
+        Y-Offset: <span id="oy">0</span><br>
+        Z-Force: <span id="oz">0</span>
     </div>
 
-    <script>
-        const video = document.getElementById('cameraPreview');
-        const startBtn = document.getElementById('startBtn');
-        const valX = document.getElementById('valX');
-        const valY = document.getElementById('valY');
-        const valZ = document.getElementById('valZ');
-        const offsetXText = document.getElementById('offsetX');
-        const offsetYText = document.getElementById('offsetY');
+    <button id="start">START STABILIZATION</button>
 
-        // Stabilization settings
-        let sensitivity = 15; // How much the video shifts per m/s^2
-        let lerpFactor = 0.1; // Smoothing (0.1 = slow/smooth, 1.0 = instant/jittery)
-        let currentShiftX = 0;
-        let currentShiftY = 0;
+<script>
+    const video = document.getElementById('cam');
+    const startBtn = document.getElementById('start');
+    
+    // Stabilization variables
+    let baselineX = 0, baselineY = 0;
+    let smoothX = 0, smoothY = 0;
+    
+    // Hyper-parameters for "Professional" feel
+    const STRENGTH = 12;      // How aggressively to counter the shake
+    const SMOOTHING = 0.08;   // How fast the camera returns to center (0.01 - 0.1)
+    const MAX_SHIFT = 60;     // Max pixels to move (prevents "jumping")
 
-        async function init() {
-            try {
-                // 1. Request Camera
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: 'environment' }, 
-                    audio: false 
-                });
-                video.srcObject = stream;
-                
-                // 2. Request Accelerometer Permission (Required for iOS 13+)
-                if (typeof DeviceMotionEvent.requestPermission === 'function') {
-                    const permission = await DeviceMotionEvent.requestPermission();
-                    if (permission === 'granted') {
-                        window.addEventListener('devicemotion', handleMotion);
-                    } else {
-                        alert("Permission denied for accelerometer.");
-                    }
-                } else {
-                    // Non-iOS devices
-                    window.addEventListener('devicemotion', handleMotion);
-                }
+    async function start() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: 'environment', frameRate: { ideal: 60 } } 
+            });
+            video.srcObject = stream;
 
-                startBtn.style.display = 'none';
-            } catch (err) {
-                console.error(err);
-                alert("Error accessing hardware: " + err.message);
+            if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                const res = await DeviceMotionEvent.requestPermission();
+                if (res === 'granted') window.addEventListener('devicemotion', stabilize);
+            } else {
+                window.addEventListener('devicemotion', stabilize);
             }
-        }
+            startBtn.style.display = 'none';
+        } catch (e) { alert("Camera/Sensor access required."); }
+    }
 
-        function handleMotion(event) {
-            // We use accelerationIncludingGravity to capture tilt and movement
-            const acc = event.accelerationIncludingGravity;
-            if (!acc) return;
+    function stabilize(event) {
+        const acc = event.accelerationIncludingGravity;
+        if (!acc) return;
 
-            // Log raw data
-            valX.textContent = acc.x.toFixed(2);
-            valY.textContent = acc.y.toFixed(2);
-            valZ.textContent = acc.z.toFixed(2);
+        // 1. Update the 'Baseline' (the slow-moving gravity vector)
+        // This represents where the phone "wants" to be.
+        baselineX = (baselineX * 0.95) + (acc.x * 0.05);
+        baselineY = (baselineY * 0.95) + (acc.y * 0.05);
 
-            // Calculate Target Offset (Negative to counteract motion)
-            // X-axis: Phone tilts/moves left/right
-            // Y-axis: Phone tilts/moves up/down
-            let targetX = -acc.x * sensitivity;
-            let targetY = acc.y * sensitivity; // Adjusted for typical handheld gravity
+        // 2. Calculate the 'Jitter' (Current - Baseline)
+        // If jitter is positive, the phone jerked one way; we move the video the other way.
+        let deltaX = (acc.x - baselineX) * STRENGTH;
+        let deltaY = (acc.y - baselineY) * STRENGTH;
 
-            // Apply Low-Pass Filter (Lerp) to stabilize movement
-            currentShiftX += (targetX - currentShiftX) * lerpFactor;
-            currentShiftY += (targetY - currentShiftY) * lerpFactor;
+        // 3. Smooth the counter-movement (Low Pass Filter)
+        // This prevents the stabilization itself from looking shaky.
+        smoothX += (deltaX - smoothX) * SMOOTHING;
+        smoothY += (deltaY - smoothY) * SMOOTHING;
 
-            // Limit the movement so it doesn't fly off screen
-            const maxShift = 50; 
-            currentShiftX = Math.max(-maxShift, Math.min(maxShift, currentShiftX));
-            currentShiftY = Math.max(-maxShift, Math.min(maxShift, currentShiftY));
+        // 4. Constraints
+        smoothX = Math.max(-MAX_SHIFT, Math.min(MAX_SHIFT, smoothX));
+        smoothY = Math.max(-MAX_SHIFT, Math.min(MAX_SHIFT, smoothY));
 
-            // Apply the transformation
-            // Scale(1.2) is the base, then we translate
-            video.style.transform = `scale(1.2) translate(${currentShiftX}px, ${currentShiftY}px)`;
+        // 5. Apply the Inverse Transform
+        // We use translate3d for GPU acceleration. 
+        // We move +X if the phone moves -X to stay "fixed" in space.
+        video.style.transform = `scale(1.3) translate3d(${smoothX.toFixed(2)}px, ${-smoothY.toFixed(2)}px, 0)`;
 
-            // Log offsets
-            offsetXText.textContent = Math.round(currentShiftX);
-            offsetYText.textContent = Math.round(currentShiftY);
-        }
+        // Update Logs
+        document.getElementById('ox').innerText = Math.round(smoothX);
+        document.getElementById('oy').innerText = Math.round(-smoothY);
+        document.getElementById('oz').innerText = acc.z.toFixed(2);
+    }
 
-        startBtn.addEventListener('click', init);
-    </script>
+    startBtn.onclick = start;
+</script>
 </body>
 </html>
