@@ -1,194 +1,170 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>CV Based AR - No Gyro</title>
-    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
-    
-    <!-- A-Frame (The 3D Engine) -->
-    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-    <!-- AR.js (The Computer Vision Engine) -->
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
-
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Accelerometer Camera Stabilizer</title>
     <style>
-        body { margin: 0; overflow: hidden; font-family: monospace; }
-        
-        /* UI Overlay */
-        #ui-layer {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none; /* Let clicks pass through */
-            z-index: 10;
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            font-family: monospace;
+            overflow: hidden;
+            color: #0f0;
+        }
+
+        /* The container clips the edges of the scaled video */
+        #viewport {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
             display: flex;
-            flex-direction: column;
-            justify-content: space-between;
+            align-items: center;
+            justify-content: center;
         }
 
-        .hud-top {
-            background: rgba(0, 0, 0, 0.6);
-            color: #00ff00;
-            padding: 10px;
-            text-align: center;
+        /* We scale the video so there's room to move it around for stabilization */
+        video {
+            min-width: 100%;
+            min-height: 100%;
+            object-fit: cover;
+            transform: scale(1.2); /* Buffer for stabilization */
+            transition: transform 0.1s linear; /* Smooths the movement */
         }
 
-        .hud-bottom {
-            padding: 20px;
-            text-align: center;
-        }
-
-        #place-btn {
-            pointer-events: auto;
-            background: #00ff00;
-            border: 2px solid white;
-            color: black;
-            font-weight: bold;
-            padding: 15px 30px;
-            font-size: 18px;
-            border-radius: 30px;
-            cursor: pointer;
-            text-transform: uppercase;
-            box-shadow: 0 0 10px #00ff00;
-        }
-
-        #place-btn:active {
-            background: white;
-        }
-
-        /* Scan Line Animation to visualize CV tracking */
-        .scanner {
-            width: 100%;
-            height: 2px;
-            background: #00ff00;
+        #overlay {
             position: absolute;
-            top: 50%;
-            animation: scan 2s infinite ease-in-out;
-            opacity: 0.5;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 15px;
+            border-radius: 8px;
+            pointer-events: none;
+            z-index: 10;
         }
 
-        @keyframes scan {
-            0% { top: 0%; opacity: 0; }
-            50% { opacity: 1; }
-            100% { top: 100%; opacity: 0; }
+        #controls {
+            position: absolute;
+            bottom: 40px;
+            width: 100%;
+            text-align: center;
+            z-index: 20;
+        }
+
+        button {
+            background: #0f0;
+            color: #000;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
         }
     </style>
 </head>
-
 <body>
 
-    <!-- UI Overlay -->
-    <div id="ui-layer">
-        <div class="hud-top">
-            <div>SYSTEM: OPTICAL TRACKING (CV)</div>
-            <div>SENSORS: DISABLED</div>
-            <div id="status">STATUS: SEARCHING FOR HIRO MARKER...</div>
-        </div>
-        <div class="scanner"></div>
-        <div class="hud-bottom">
-            <button id="place-btn">PLACE CUBE</button>
+    <div id="viewport">
+        <video id="cameraPreview" autoplay playsinline></video>
+        
+        <div id="overlay">
+            <strong>Accelerometer Logs (m/s²)</strong><br>
+            X: <span id="valX">0.00</span><br>
+            Y: <span id="valY">0.00</span><br>
+            Z: <span id="valZ">0.00</span>
+            <hr>
+            <strong>Stabilization Offset</strong><br>
+            Shift X: <span id="offsetX">0</span>px<br>
+            Shift Y: <span id="offsetY">0</span>px
         </div>
     </div>
 
-    <!-- 
-      AR Scene Setup 
-      arjs parameters:
-      - sourceType: webcam -> Use the camera
-      - debugUIEnabled: false -> Hide the ugly debug text
-      - detectionMode: mono -> Faster processing for black/white markers
-      - matrixCodeType: 3x3 -> Standard barcode type
-    -->
-    <a-scene 
-        embedded 
-        arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono; maxDetectionRate: 60; canvasWidth: 640; canvasHeight: 480"
-        renderer="logarithmicDepthBuffer: true; precision: medium;"
-        vr-mode-ui="enabled: false"> <!-- Disable VR button/gyro requirement -->
-
-        <!-- 
-           The Marker 
-           This is the "Anchor" of our world.
-           Since we aren't using a Gyro, the world (0,0,0) is defined 
-           by the center of the Hiro image.
-           
-           smooth="true": Uses linear interpolation to simulate a "gyro-like" 
-           feel and reduce the jitter inherent in raw Computer Vision.
-        -->
-        <a-marker preset="hiro" smooth="true" smoothCount="10" smoothTolerance="0.01" smoothThreshold="5" id="marker-root">
-            
-            <!-- This ghost box shows where the cube will appear -->
-            <a-box id="cursor-box" position="0 0.5 0" material="color: red; opacity: 0.5; transparent: true" animation="property: rotation; to: 0 360 0; loop: true; dur: 3000"></a-box>
-            
-            <!-- Container for placed cubes -->
-            <a-entity id="cube-container"></a-entity>
-
-        </a-marker>
-
-        <!-- Camera: Look-controls disabled to force CV only -->
-        <a-entity camera></a-entity>
-
-    </a-scene>
+    <div id="controls">
+        <button id="startBtn">Enable Stabilized Camera</button>
+    </div>
 
     <script>
-        // References
-        const marker = document.querySelector("#marker-root");
-        const statusText = document.querySelector("#status");
-        const container = document.querySelector("#cube-container");
-        const btn = document.querySelector("#place-btn");
-        
-        let markerFound = false;
+        const video = document.getElementById('cameraPreview');
+        const startBtn = document.getElementById('startBtn');
+        const valX = document.getElementById('valX');
+        const valY = document.getElementById('valY');
+        const valZ = document.getElementById('valZ');
+        const offsetXText = document.getElementById('offsetX');
+        const offsetYText = document.getElementById('offsetY');
 
-        // Event: Marker Found via CV
-        marker.addEventListener("markerFound", (e) => {
-            markerFound = true;
-            statusText.innerHTML = "STATUS: <span style='color:white'>LOCKED ON TARGET</span>";
-            statusText.style.color = "#00ff00";
-            // Hide the scanner line when found (optional visual polish)
-            document.querySelector('.scanner').style.display = 'none';
-        });
+        // Stabilization settings
+        let sensitivity = 15; // How much the video shifts per m/s^2
+        let lerpFactor = 0.1; // Smoothing (0.1 = slow/smooth, 1.0 = instant/jittery)
+        let currentShiftX = 0;
+        let currentShiftY = 0;
 
-        // Event: Marker Lost
-        marker.addEventListener("markerLost", (e) => {
-            markerFound = false;
-            statusText.innerHTML = "STATUS: SIGNAL LOST - REACQUIRING...";
-            statusText.style.color = "red";
-            document.querySelector('.scanner').style.display = 'block';
-        });
+        async function init() {
+            try {
+                // 1. Request Camera
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'environment' }, 
+                    audio: false 
+                });
+                video.srcObject = stream;
+                
+                // 2. Request Accelerometer Permission (Required for iOS 13+)
+                if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                    const permission = await DeviceMotionEvent.requestPermission();
+                    if (permission === 'granted') {
+                        window.addEventListener('devicemotion', handleMotion);
+                    } else {
+                        alert("Permission denied for accelerometer.");
+                    }
+                } else {
+                    // Non-iOS devices
+                    window.addEventListener('devicemotion', handleMotion);
+                }
 
-        // Function to create random colors
-        function getRandomColor() {
-            const letters = '0123456789ABCDEF';
-            let color = '#';
-            for (let i = 0; i < 6; i++) {
-                color += letters[Math.floor(Math.random() * 16)];
+                startBtn.style.display = 'none';
+            } catch (err) {
+                console.error(err);
+                alert("Error accessing hardware: " + err.message);
             }
-            return color;
         }
 
-        // Logic: Place Cube
-        btn.addEventListener("click", () => {
-            if (!markerFound) {
-                alert("Please point camera at the Hiro marker first!");
-                return;
-            }
+        function handleMotion(event) {
+            // We use accelerationIncludingGravity to capture tilt and movement
+            const acc = event.accelerationIncludingGravity;
+            if (!acc) return;
 
-            // Create a new A-Frame Box entity
-            const newCube = document.createElement("a-box");
-            
-            // Randomize position slightly around the center to prevent stacking perfectly
-            const xOffset = (Math.random() - 0.5) * 1.5; 
-            const zOffset = (Math.random() - 0.5) * 1.5;
-            const yOffset = 0.25; // Sitting on the plane
+            // Log raw data
+            valX.textContent = acc.x.toFixed(2);
+            valY.textContent = acc.y.toFixed(2);
+            valZ.textContent = acc.z.toFixed(2);
 
-            newCube.setAttribute("position", `${xOffset} ${yOffset} ${zOffset}`);
-            newCube.setAttribute("material", `color: ${getRandomColor()}; opacity: 0.9`);
-            newCube.setAttribute("scale", "0.5 0.5 0.5");
-            
-            // Add a little entry animation
-            newCube.setAttribute("animation", "property: scale; from: 0 0 0; to: 0.5 0.5 0.5; dur: 500; easing: easeOutElastic");
+            // Calculate Target Offset (Negative to counteract motion)
+            // X-axis: Phone tilts/moves left/right
+            // Y-axis: Phone tilts/moves up/down
+            let targetX = -acc.x * sensitivity;
+            let targetY = acc.y * sensitivity; // Adjusted for typical handheld gravity
 
-            // Append to the marker container (so it stays "stuck" to the real world image)
-            container.appendChild(newCube);
-        });
+            // Apply Low-Pass Filter (Lerp) to stabilize movement
+            currentShiftX += (targetX - currentShiftX) * lerpFactor;
+            currentShiftY += (targetY - currentShiftY) * lerpFactor;
+
+            // Limit the movement so it doesn't fly off screen
+            const maxShift = 50; 
+            currentShiftX = Math.max(-maxShift, Math.min(maxShift, currentShiftX));
+            currentShiftY = Math.max(-maxShift, Math.min(maxShift, currentShiftY));
+
+            // Apply the transformation
+            // Scale(1.2) is the base, then we translate
+            video.style.transform = `scale(1.2) translate(${currentShiftX}px, ${currentShiftY}px)`;
+
+            // Log offsets
+            offsetXText.textContent = Math.round(currentShiftX);
+            offsetYText.textContent = Math.round(currentShiftY);
+        }
+
+        startBtn.addEventListener('click', init);
     </script>
 </body>
 </html>
