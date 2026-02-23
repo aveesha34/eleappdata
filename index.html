@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>High Density QR Transfer</title>
+    <title>Rapid Low-Density Transfer</title>
     
     <!-- Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -11,284 +11,265 @@
 
     <style>
         :root {
-            --primary: #00e5ff;
-            --bg: #111;
-            --surface: #1e1e1e;
-            --modal-bg: rgba(0, 0, 0, 0.95);
+            --primary: #ffeb3b; /* Yellow for speed/caution */
+            --bg: #121212;
+            --surface: #222;
+            --overlay: rgba(0,0,0,0.95);
         }
 
         body {
-            font-family: 'Segoe UI', sans-serif;
+            font-family: 'Courier New', Courier, monospace;
             background-color: var(--bg);
             color: #eee;
+            margin: 0;
             display: flex;
             flex-direction: column;
             align-items: center;
-            margin: 0;
-            padding: 10px;
             min-height: 100vh;
         }
 
-        h2 { color: var(--primary); text-transform: uppercase; letter-spacing: 1px; }
+        h2 { color: var(--primary); text-transform: uppercase; margin-top: 20px; }
 
-        /* Navigation */
-        .nav { margin: 15px 0; display: flex; gap: 15px; }
+        .nav { margin: 20px 0; display: flex; gap: 20px; }
+        
         button {
-            background: rgba(0, 229, 255, 0.1);
-            color: var(--primary);
-            border: 1px solid var(--primary);
-            padding: 12px 24px;
+            padding: 10px 20px;
+            font-size: 1rem;
             font-weight: bold;
+            color: var(--primary);
+            background: transparent;
+            border: 2px solid var(--primary);
             cursor: pointer;
-            border-radius: 4px;
-            transition: 0.3s;
+            text-transform: uppercase;
         }
+
         button:hover, button.active {
             background: var(--primary);
             color: #000;
         }
 
-        /* Container Views */
-        .container {
+        /* Views */
+        .view {
             display: none;
-            width: 100%;
-            max-width: 600px;
+            width: 90%;
+            max-width: 500px;
             flex-direction: column;
             align-items: center;
             background: var(--surface);
             padding: 20px;
-            border-radius: 8px;
-            box-sizing: border-box;
+            border: 1px solid #333;
         }
-        .container.active { display: flex; }
+        .view.active { display: flex; }
 
-        /* Sender UI */
+        /* Sender */
         #qr-display {
             background: #fff;
-            padding: 15px;
+            padding: 10px;
             margin-top: 20px;
-            border-radius: 4px;
-            width: 400px;
-            height: 400px;
+            /* Fixed size, large enough for easy scanning */
+            width: 350px;
+            height: 350px;
             display: flex;
             justify-content: center;
             align-items: center;
         }
-        @media (max-width: 450px) {
-            #qr-display { width: 300px; height: 300px; }
-        }
 
-        input, textarea {
+        textarea, input[type="file"] {
             width: 100%;
             background: #000;
-            color: #fff;
+            color: var(--primary);
             border: 1px solid #444;
             padding: 10px;
-            box-sizing: border-box;
             margin-bottom: 10px;
         }
 
-        /* Receiver UI */
-        #cam-wrapper {
-            position: relative;
-            width: 100%;
-            max-width: 500px;
-            background: #000;
-            border: 2px solid #333;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        video { width: 100%; display: block; }
+        #stats { font-size: 0.8rem; color: #888; margin-top: 5px; }
 
-        #progress-container {
-            width: 100%;
-            height: 30px;
-            background: #333;
-            margin-top: 20px;
+        /* Receiver */
+        #cam-box {
             position: relative;
-            border-radius: 15px;
+            width: 100%;
+            max-width: 400px;
+            aspect-ratio: 1;
+            background: #000;
+            border: 2px solid var(--primary);
             overflow: hidden;
         }
-        #progress-bar {
-            height: 100%;
-            background: var(--primary);
-            width: 0%;
-            transition: width 0.2s ease-out;
+        video { width: 100%; height: 100%; object-fit: cover; }
+
+        #progress-wrap {
+            width: 100%;
+            height: 25px;
+            background: #333;
+            margin-top: 15px;
+            position: relative;
         }
-        #progress-text {
+        #progress-fill {
+            height: 100%;
+            width: 0%;
+            background: var(--primary);
+            transition: width 0.1s linear;
+        }
+        #progress-txt {
             position: absolute;
             width: 100%;
             text-align: center;
-            top: 50%;
-            transform: translateY(-50%);
+            top: 2px;
             color: #fff;
             font-weight: bold;
-            text-shadow: 1px 1px 2px #000;
+            text-shadow: 1px 1px 0 #000;
             pointer-events: none;
         }
 
-        /* MODAL POPUP */
-        #modal-overlay {
+        /* Modal */
+        #modal {
             display: none;
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
-            background: var(--modal-bg);
-            z-index: 1000;
+            background: var(--overlay);
+            z-index: 999;
             justify-content: center;
             align-items: center;
             flex-direction: column;
         }
-        #modal-overlay.show { display: flex; }
+        #modal.open { display: flex; }
         
         #modal-content {
-            background: var(--surface);
+            background: #222;
             padding: 20px;
             border: 2px solid var(--primary);
-            border-radius: 8px;
             max-width: 90%;
             max-height: 90%;
             overflow-y: auto;
             text-align: center;
         }
-        #modal-body img {
+        #modal-content img {
             max-width: 100%;
-            height: auto;
             border: 1px solid #555;
-            margin-bottom: 15px;
-        }
-        #modal-body {
-            margin-bottom: 20px;
-            word-break: break-all;
+            margin: 10px 0;
         }
 
     </style>
 </head>
 <body>
 
-    <h2>Secure Data Link</h2>
+    <h2>Turbo Link</h2>
 
     <div class="nav">
-        <button onclick="setMode('send')" id="btn-send">Sender</button>
-        <button onclick="setMode('receive')" id="btn-receive">Receiver</button>
+        <button onclick="switchView('send')" id="btn-send">Send</button>
+        <button onclick="switchView('receive')" id="btn-receive">Receive</button>
     </div>
 
-    <!-- SENDER VIEW -->
-    <div id="view-send" class="container">
-        <textarea id="txt-in" placeholder="Type text..." rows="2" oninput="processInput('txt')"></textarea>
-        <div style="font-size:0.8rem; margin:5px 0; color:#888;">OR</div>
-        <input type="file" id="file-in" accept="image/*" onchange="processInput('img')">
+    <!-- SENDER -->
+    <div id="view-send" class="view">
+        <textarea id="txt-in" placeholder="Type text..." rows="2" oninput="inputHandler('txt')"></textarea>
+        <div style="font-size:0.8rem; margin:5px 0;">OR</div>
+        <input type="file" id="file-in" accept="image/*" onchange="inputHandler('img')">
         
         <div id="qr-display"></div>
-        <div id="send-stats" style="margin-top:10px; color:#aaa; font-family:monospace;">Waiting...</div>
-        <button onclick="stopSending()" style="margin-top:15px; border-color:red; color:red;">Stop</button>
+        <div id="stats">Ready</div>
+        <button onclick="stopSend()" style="margin-top:10px; color:#ff4444; border-color:#ff4444; font-size:0.8rem;">Stop</button>
     </div>
 
-    <!-- RECEIVER VIEW -->
-    <div id="view-receive" class="container">
-        <div id="cam-wrapper">
+    <!-- RECEIVER -->
+    <div id="view-receive" class="view">
+        <div id="cam-box">
             <video id="video" playsinline></video>
             <canvas id="scan-canvas" style="display:none;"></canvas>
         </div>
         
-        <div id="progress-container">
-            <div id="progress-bar"></div>
-            <div id="progress-text">0%</div>
+        <div id="progress-wrap">
+            <div id="progress-fill"></div>
+            <div id="progress-txt">0%</div>
         </div>
-        <div style="margin-top:10px; color:#888;">Align camera with QR code</div>
-        <button onclick="resetReceiver()" style="margin-top:10px;">Reset</button>
+        <div style="margin-top:10px; color:#888;">Point camera at flashing QR</div>
+        <button onclick="resetReceive()" style="margin-top:10px; font-size:0.8rem;">Reset</button>
     </div>
 
-    <!-- POPUP MODAL -->
-    <div id="modal-overlay">
+    <!-- POPUP -->
+    <div id="modal">
         <div id="modal-content">
-            <h3 style="margin-top:0;">Transfer Complete</h3>
+            <h3 style="color:var(--primary); margin-top:0;">Received!</h3>
             <div id="modal-body"></div>
-            <button onclick="closeModal()">Close & Scan Again</button>
+            <button onclick="closeModal()">Close & Restart</button>
         </div>
     </div>
 
-    <!-- Hidden Canvas for Compression -->
+    <!-- UTILS -->
     <canvas id="compressor" style="display:none;"></canvas>
 
     <script>
-        // --- CONFIGURATION ---
-        const FLASH_SPEED_MS = 350; // 4x slower (approx 3 FPS)
-        const CHUNK_MAX_LEN = 1200; // High Density
-        const MAX_IMG_SIZE = 300;   // Compression Size
-
-        // --- GLOBAL VARIABLES ---
-        let sendTimer = null;
-        let qrObj = null;
-        let packetList = [];
+        // --- CONFIG ---
+        // 80ms = Very fast flashing (Requires simple QRs)
+        const FLASH_MS = 80; 
         
-        let isScanning = false;
-        let videoStream = null;
-        let receivedPackets = {};
-        let totalPackets = 0;
-        let receiveCompleted = false;
+        // 150 Chars = Very simple QR (Version 6-8). Easy to scan.
+        const CHUNK_SIZE = 150; 
+        
+        // 200px = Tiny image to keep packet count low
+        const IMG_MAX_PX = 200; 
 
-        // --- NAVIGATION ---
-        function setMode(mode) {
-            document.querySelectorAll('.container').forEach(e => e.classList.remove('active'));
-            document.getElementById('view-' + mode).classList.add('active');
+        // --- VARS ---
+        let sendInt = null;
+        let qr = null;
+        let packets = [];
+        
+        let scanning = false;
+        let stream = null;
+        let rxPackets = {};
+        let rxTotal = 0;
+        let done = false;
+
+        // --- NAV ---
+        function switchView(v) {
+            document.querySelectorAll('.view').forEach(e => e.classList.remove('active'));
+            document.getElementById('view-'+v).classList.add('active');
             
-            document.getElementById('btn-send').classList.toggle('active', mode === 'send');
-            document.getElementById('btn-receive').classList.toggle('active', mode === 'receive');
+            document.getElementById('btn-send').classList.toggle('active', v==='send');
+            document.getElementById('btn-receive').classList.toggle('active', v==='receive');
 
-            if(mode === 'send') stopCamera();
-            else {
-                stopSending();
-                startCamera();
-            }
+            if(v==='send') stopCam();
+            else { stopSend(); startCam(); }
         }
 
-        // --- SENDER ---
-        async function processInput(type) {
-            stopSending();
-            let rawData = "";
+        // --- SEND LOGIC ---
+        async function inputHandler(type) {
+            stopSend();
+            let data = "";
 
-            if (type === 'txt') {
+            if(type === 'txt') {
                 const val = document.getElementById('txt-in').value;
-                if(!val) return;
-                rawData = "T:" + val;
-                prepareAndTransmit(rawData);
-            } 
-            else if (type === 'img') {
+                if(val) data = "T:" + val;
+            } else {
                 const file = document.getElementById('file-in').files[0];
-                if (!file) return;
-                document.getElementById('send-stats').innerText = "Compressing Image...";
-                
-                // Compress
-                const compressedBase64 = await compressImage(file);
-                rawData = "I:" + compressedBase64;
-                prepareAndTransmit(rawData);
+                if(file) {
+                    document.getElementById('stats').innerText = "Compressing...";
+                    data = "I:" + await compress(file);
+                }
             }
+
+            if(data) buildPackets(data);
         }
 
-        function compressImage(file) {
-            return new Promise((resolve) => {
+        function compress(file) {
+            return new Promise(resolve => {
                 const reader = new FileReader();
-                reader.onload = (e) => {
+                reader.onload = e => {
                     const img = new Image();
                     img.onload = () => {
-                        const canvas = document.getElementById('compressor');
-                        let w = img.width;
-                        let h = img.height;
+                        const cvs = document.getElementById('compressor');
+                        let w = img.width, h = img.height;
                         
-                        // Resize (Lossy dimension)
-                        if (w > h) {
-                            if (w > MAX_IMG_SIZE) { h *= MAX_IMG_SIZE / w; w = MAX_IMG_SIZE; }
-                        } else {
-                            if (h > MAX_IMG_SIZE) { w *= MAX_IMG_SIZE / h; h = MAX_IMG_SIZE; }
-                        }
+                        // Resize logic
+                        if(w>h) { if(w>IMG_MAX_PX) { h*=IMG_MAX_PX/w; w=IMG_MAX_PX; } }
+                        else { if(h>IMG_MAX_PX) { w*=IMG_MAX_PX/h; h=IMG_MAX_PX; } }
 
-                        canvas.width = w;
-                        canvas.height = h;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(img, 0, 0, w, h);
+                        cvs.width = w; cvs.height = h;
+                        const ctx = cvs.getContext('2d');
+                        ctx.drawImage(img,0,0,w,h);
                         
-                        // JPEG compression (Lossy quality)
-                        resolve(canvas.toDataURL('image/jpeg', 0.5)); 
+                        // Heavy compression (0.3)
+                        resolve(cvs.toDataURL('image/jpeg', 0.3));
                     };
                     img.src = e.target.result;
                 };
@@ -296,196 +277,165 @@
             });
         }
 
-        function prepareAndTransmit(dataString) {
-            packetList = [];
-            // Calculate chunks
-            const total = Math.ceil(dataString.length / CHUNK_MAX_LEN);
+        function buildPackets(str) {
+            packets = [];
+            const count = Math.ceil(str.length / CHUNK_SIZE);
             
-            for (let i = 0; i < total; i++) {
-                const chunk = dataString.substr(i * CHUNK_MAX_LEN, CHUNK_MAX_LEN);
-                // Protocol: Index|Total|Data
-                packetList.push(`${i}|${total}|${chunk}`);
+            for(let i=0; i<count; i++) {
+                // Header: i|total|data
+                packets.push(`${i}|${count}|${str.substr(i*CHUNK_SIZE, CHUNK_SIZE)}`);
             }
 
-            document.getElementById('send-stats').innerText = `Packets: ${total}. Flashing...`;
+            document.getElementById('stats').innerText = `Packets: ${count}. Speed: 12Hz`;
             
-            const container = document.getElementById('qr-display');
-            container.innerHTML = "";
-            qrObj = new QRCode(container, {
-                width: 400,
-                height: 400,
-                correctLevel : QRCode.CorrectLevel.L
+            // Init QR
+            const el = document.getElementById('qr-display');
+            el.innerHTML = "";
+            qr = new QRCode(el, {
+                width: 350,
+                height: 350,
+                correctLevel: QRCode.CorrectLevel.L // Lowest ECC for easiest scanning
             });
 
-            startFlashing();
+            startFlash();
         }
 
-        function startFlashing() {
-            let index = 0;
-            // Immediate first frame
-            qrObj.makeCode(packetList[0]);
+        function startFlash() {
+            let i = 0;
+            qr.makeCode(packets[0]); // First frame
 
-            sendTimer = setInterval(() => {
-                if (packetList.length === 0) return;
-                
-                index++;
-                if (index >= packetList.length) index = 0;
-                
-                qrObj.makeCode(packetList[index]);
-                document.getElementById('send-stats').innerText = `Sending: ${index+1}/${packetList.length}`;
-            }, FLASH_SPEED_MS);
+            sendInt = setInterval(() => {
+                if(!packets.length) return;
+                i++;
+                if(i >= packets.length) i = 0;
+                qr.makeCode(packets[i]);
+            }, FLASH_MS);
         }
 
-        function stopSending() {
-            if (sendTimer) clearInterval(sendTimer);
+        function stopSend() {
+            clearInterval(sendInt);
             document.getElementById('qr-display').innerHTML = "";
-            document.getElementById('send-stats').innerText = "Stopped.";
-            packetList = [];
+            packets = [];
+            document.getElementById('stats').innerText = "Ready";
         }
 
-        // --- RECEIVER ---
-        async function startCamera() {
-            // Only start if not completed
-            if(receiveCompleted) return;
-
+        // --- RECEIVE LOGIC ---
+        async function startCam() {
+            if(done) return;
             resetUI();
-            const video = document.getElementById('video');
+            
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
+                const v = document.getElementById('video');
+                stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { facingMode: "environment" } 
                 });
-                videoStream = stream;
-                video.srcObject = stream;
-                video.setAttribute("playsinline", true);
-                video.play();
-                isScanning = true;
-                requestAnimationFrame(scanLoop);
-            } catch (err) {
-                alert("Camera Error: " + err);
-            }
+                v.srcObject = stream;
+                v.setAttribute("playsinline", true);
+                v.play();
+                scanning = true;
+                requestAnimationFrame(tick);
+            } catch(e) { console.error(e); }
         }
 
-        function stopCamera() {
-            isScanning = false;
-            if (videoStream) {
-                videoStream.getTracks().forEach(track => track.stop());
-                videoStream = null;
-            }
+        function stopCam() {
+            scanning = false;
+            if(stream) stream.getTracks().forEach(t=>t.stop());
         }
 
-        function scanLoop() {
-            if (!isScanning) return;
-            
-            const video = document.getElementById('video');
-            const canvas = document.getElementById('scan-canvas');
-            const ctx = canvas.getContext('2d');
-
-            if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                ctx.drawImage(video, 0, 0);
+        function tick() {
+            if(!scanning) return;
+            const v = document.getElementById('video');
+            if(v.readyState === v.HAVE_ENOUGH_DATA) {
+                const cvs = document.getElementById('scan-canvas');
+                const ctx = cvs.getContext('2d');
+                cvs.width = v.videoWidth;
+                cvs.height = v.videoHeight;
+                ctx.drawImage(v,0,0);
                 
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                const imgData = ctx.getImageData(0,0,cvs.width,cvs.height);
+                const code = jsQR(imgData.data, imgData.width, imgData.height, {
                     inversionAttempts: "dontInvert"
                 });
 
-                if (code && code.data && !receiveCompleted) {
-                    parsePacket(code.data);
-                }
+                if(code && code.data) handleData(code.data);
             }
-            requestAnimationFrame(scanLoop);
+            requestAnimationFrame(tick);
         }
 
-        function parsePacket(str) {
-            // Find separators
+        function handleData(str) {
+            // Parse: idx|tot|payload
             const p1 = str.indexOf('|');
-            const p2 = str.indexOf('|', p1 + 1);
-            if (p1 === -1 || p2 === -1) return;
+            const p2 = str.indexOf('|', p1+1);
+            if(p1<0 || p2<0) return;
 
-            const idx = parseInt(str.substring(0, p1));
-            const tot = parseInt(str.substring(p1 + 1, p2));
-            const data = str.substring(p2 + 1);
+            const idx = parseInt(str.substring(0,p1));
+            const tot = parseInt(str.substring(p1+1, p2));
+            const pl = str.substring(p2+1);
 
-            if (isNaN(idx) || isNaN(tot)) return;
+            if(isNaN(idx) || isNaN(tot)) return;
 
-            // Initialize Session
-            if (totalPackets === 0) totalPackets = tot;
-            if (totalPackets !== tot) return; // Ignore different session data
+            if(rxTotal === 0) rxTotal = tot;
+            if(rxTotal !== tot) return; // Wrong session
 
-            // Store Data
-            if (!receivedPackets[idx]) {
-                receivedPackets[idx] = data;
-                updateProgress();
+            if(!rxPackets[idx]) {
+                rxPackets[idx] = pl;
+                updateProg();
             }
         }
 
-        function updateProgress() {
-            const count = Object.keys(receivedPackets).length;
-            const pct = Math.round((count / totalPackets) * 100);
+        function updateProg() {
+            const count = Object.keys(rxPackets).length;
+            const pct = Math.round((count/rxTotal)*100);
             
-            document.getElementById('progress-bar').style.width = pct + "%";
-            document.getElementById('progress-text').innerText = `${count}/${totalPackets}`;
+            document.getElementById('progress-fill').style.width = pct+"%";
+            document.getElementById('progress-txt').innerText = `${count}/${rxTotal}`;
 
-            if (count === totalPackets && !receiveCompleted) {
-                finishReceive();
-            }
+            if(count === rxTotal) finish();
         }
 
-        function finishReceive() {
-            receiveCompleted = true;
-            stopCamera(); // Stop camera immediately
-
-            // Reconstruct Data
-            let fullStr = "";
-            for (let i = 0; i < totalPackets; i++) {
-                if(receivedPackets[i]) {
-                    fullStr += receivedPackets[i];
-                }
-            }
-
-            // Determine Content
-            const type = fullStr.substring(0, 2); // T: or I:
-            const content = fullStr.substring(2);
+        function finish() {
+            done = true;
+            stopCam();
             
-            const body = document.getElementById('modal-body');
-            body.innerHTML = "";
+            // Reconstruct
+            let full = "";
+            for(let i=0; i<rxTotal; i++) full += rxPackets[i] || "";
 
-            if (type === "I:") {
+            const type = full.substring(0,2);
+            const content = full.substring(2);
+            const box = document.getElementById('modal-body');
+            box.innerHTML = "";
+
+            if(type === "I:") {
                 const img = document.createElement('img');
                 img.src = content;
-                body.appendChild(img);
-                
-                const note = document.createElement('div');
-                note.innerText = "Image Reconstructed.";
-                body.appendChild(note);
+                box.appendChild(img);
+                box.innerHTML += "<div>Image Received</div>";
             } else {
-                body.innerText = content;
+                box.innerText = content;
             }
-
-            // Show Popup
-            document.getElementById('modal-overlay').classList.add('show');
+            
+            document.getElementById('modal').classList.add('open');
         }
 
         function closeModal() {
-            document.getElementById('modal-overlay').classList.remove('show');
-            resetReceiver(); // This resets state and restarts camera
+            document.getElementById('modal').classList.remove('open');
+            resetReceive();
         }
 
         function resetUI() {
-            document.getElementById('progress-bar').style.width = "0%";
-            document.getElementById('progress-text').innerText = "0%";
+            document.getElementById('progress-fill').style.width = "0%";
+            document.getElementById('progress-txt').innerText = "0%";
         }
 
-        function resetReceiver() {
-            receivedPackets = {};
-            totalPackets = 0;
-            receiveCompleted = false;
+        function resetReceive() {
+            rxPackets = {};
+            rxTotal = 0;
+            done = false;
             resetUI();
-            stopCamera();
-            startCamera();
+            stopCam();
+            startCam();
         }
-
     </script>
 </body>
 </html>
