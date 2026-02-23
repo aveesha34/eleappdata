@@ -1,441 +1,313 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rapid Low-Density Transfer</title>
-    
-    <!-- Libraries -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Turbo Link Pro</title>
 
-    <style>
-        :root {
-            --primary: #ffeb3b; /* Yellow for speed/caution */
-            --bg: #121212;
-            --surface: #222;
-            --overlay: rgba(0,0,0,0.95);
-        }
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 
-        body {
-            font-family: 'Courier New', Courier, monospace;
-            background-color: var(--bg);
-            color: #eee;
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            min-height: 100vh;
-        }
+<style>
+:root{
+    --primary:#ffeb3b;
+    --bg:#121212;
+    --surface:#1e1e1e;
+}
 
-        h2 { color: var(--primary); text-transform: uppercase; margin-top: 20px; }
+/* ================= GENERAL ================= */
+body{
+    margin:0;
+    font-family:monospace;
+    background:var(--bg);
+    color:#eee;
+}
 
-        .nav { margin: 20px 0; display: flex; gap: 20px; }
-        
-        button {
-            padding: 10px 20px;
-            font-size: 1rem;
-            font-weight: bold;
-            color: var(--primary);
-            background: transparent;
-            border: 2px solid var(--primary);
-            cursor: pointer;
-            text-transform: uppercase;
-        }
+button{
+    background:transparent;
+    border:2px solid var(--primary);
+    color:var(--primary);
+    padding:8px 16px;
+    cursor:pointer;
+}
 
-        button:hover, button.active {
-            background: var(--primary);
-            color: #000;
-        }
+button:hover{ background:var(--primary); color:#000; }
 
-        /* Views */
-        .view {
-            display: none;
-            width: 90%;
-            max-width: 500px;
-            flex-direction: column;
-            align-items: center;
-            background: var(--surface);
-            padding: 20px;
-            border: 1px solid #333;
-        }
-        .view.active { display: flex; }
+.view{ display:none; }
+.view.active{ display:flex; }
 
-        /* Sender */
-        #qr-display {
-            background: #fff;
-            padding: 10px;
-            margin-top: 20px;
-            /* Fixed size, large enough for easy scanning */
-            width: 350px;
-            height: 350px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
+#qr-display{
+    background:#fff;
+    width:300px;
+    height:300px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+}
 
-        textarea, input[type="file"] {
-            width: 100%;
-            background: #000;
-            color: var(--primary);
-            border: 1px solid #444;
-            padding: 10px;
-            margin-bottom: 10px;
-        }
+/* ================= DESKTOP ================= */
+@media(min-width:900px){
+    body{ display:flex; height:100vh; }
+    #left,#right{
+        flex:1;
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+        justify-content:center;
+        padding:20px;
+    }
+    #right{ border-left:1px solid #333; }
+}
 
-        #stats { font-size: 0.8rem; color: #888; margin-top: 5px; }
+/* ================= MOBILE ================= */
+@media(max-width:899px){
+    body{
+        display:flex;
+        flex-direction:column;
+        align-items:center;
+    }
+    #left,#right{
+        width:100%;
+        padding:20px;
+        box-sizing:border-box;
+    }
+}
 
-        /* Receiver */
-        #cam-box {
-            position: relative;
-            width: 100%;
-            max-width: 400px;
-            aspect-ratio: 1;
-            background: #000;
-            border: 2px solid var(--primary);
-            overflow: hidden;
-        }
-        video { width: 100%; height: 100%; object-fit: cover; }
+/* ================= CAMERA ================= */
+#cam-box{
+    width:100%;
+    max-width:400px;
+    aspect-ratio:1;
+    background:#000;
+    border:2px solid var(--primary);
+}
 
-        #progress-wrap {
-            width: 100%;
-            height: 25px;
-            background: #333;
-            margin-top: 15px;
-            position: relative;
-        }
-        #progress-fill {
-            height: 100%;
-            width: 0%;
-            background: var(--primary);
-            transition: width 0.1s linear;
-        }
-        #progress-txt {
-            position: absolute;
-            width: 100%;
-            text-align: center;
-            top: 2px;
-            color: #fff;
-            font-weight: bold;
-            text-shadow: 1px 1px 0 #000;
-            pointer-events: none;
-        }
+video{ width:100%; height:100%; object-fit:cover; }
 
-        /* Modal */
-        #modal {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: var(--overlay);
-            z-index: 999;
-            justify-content: center;
-            align-items: center;
-            flex-direction: column;
-        }
-        #modal.open { display: flex; }
-        
-        #modal-content {
-            background: #222;
-            padding: 20px;
-            border: 2px solid var(--primary);
-            max-width: 90%;
-            max-height: 90%;
-            overflow-y: auto;
-            text-align: center;
-        }
-        #modal-content img {
-            max-width: 100%;
-            border: 1px solid #555;
-            margin: 10px 0;
-        }
+#progress-wrap{
+    width:100%;
+    height:20px;
+    background:#333;
+    margin-top:10px;
+}
 
-    </style>
+#progress-fill{
+    height:100%;
+    width:0%;
+    background:var(--primary);
+}
+
+/* ================= MODAL ================= */
+#modal{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.95);
+    display:none;
+    align-items:center;
+    justify-content:center;
+}
+
+#modal.open{ display:flex; }
+
+#modal-content{
+    background:#222;
+    padding:20px;
+    max-width:90%;
+    max-height:90%;
+    overflow:auto;
+}
+
+#modal img{
+    max-width:100%;
+}
+</style>
 </head>
+
 <body>
 
-    <h2>Turbo Link</h2>
+<div id="left">
+    <h2>Send</h2>
+    <textarea id="txt-in" placeholder="Type text"></textarea>
+    <input type="file" id="file-in" accept="image/*">
+    
+    <label>Flicker Speed (ms)</label>
+    <input type="range" id="speed" min="30" max="500" value="80">
+    <div id="hz">Speed: 80ms (12Hz)</div>
 
-    <div class="nav">
-        <button onclick="switchView('send')" id="btn-send">Send</button>
-        <button onclick="switchView('receive')" id="btn-receive">Receive</button>
+    <button onclick="startSend()">Start</button>
+    <div id="qr-display"></div>
+</div>
+
+<div id="right">
+    <h2>Receive</h2>
+    <div id="cam-box">
+        <video id="video" playsinline></video>
+        <canvas id="scan" style="display:none"></canvas>
     </div>
-
-    <!-- SENDER -->
-    <div id="view-send" class="view">
-        <textarea id="txt-in" placeholder="Type text..." rows="2" oninput="inputHandler('txt')"></textarea>
-        <div style="font-size:0.8rem; margin:5px 0;">OR</div>
-        <input type="file" id="file-in" accept="image/*" onchange="inputHandler('img')">
-        
-        <div id="qr-display"></div>
-        <div id="stats">Ready</div>
-        <button onclick="stopSend()" style="margin-top:10px; color:#ff4444; border-color:#ff4444; font-size:0.8rem;">Stop</button>
+    <div id="progress-wrap">
+        <div id="progress-fill"></div>
     </div>
+</div>
 
-    <!-- RECEIVER -->
-    <div id="view-receive" class="view">
-        <div id="cam-box">
-            <video id="video" playsinline></video>
-            <canvas id="scan-canvas" style="display:none;"></canvas>
-        </div>
-        
-        <div id="progress-wrap">
-            <div id="progress-fill"></div>
-            <div id="progress-txt">0%</div>
-        </div>
-        <div style="margin-top:10px; color:#888;">Point camera at flashing QR</div>
-        <button onclick="resetReceive()" style="margin-top:10px; font-size:0.8rem;">Reset</button>
-    </div>
+<div id="modal">
+<div id="modal-content">
+    <div id="result"></div>
+    <button onclick="closeModal()">Close</button>
+</div>
+</div>
 
-    <!-- POPUP -->
-    <div id="modal">
-        <div id="modal-content">
-            <h3 style="color:var(--primary); margin-top:0;">Received!</h3>
-            <div id="modal-body"></div>
-            <button onclick="closeModal()">Close & Restart</button>
-        </div>
-    </div>
+<script>
+/* ================= CONFIG ================= */
+let FLASH_MS = 80;
+const CHUNK = 150;
+const IMG_MAX = 250;
 
-    <!-- UTILS -->
-    <canvas id="compressor" style="display:none;"></canvas>
+/* ================= VARS ================= */
+let packets=[];
+let sendInt=null;
+let qr=null;
+let stream=null;
+let scanning=true;
+let rxPackets={};
+let rxTotal=0;
 
-    <script>
-        // --- CONFIG ---
-        // 80ms = Very fast flashing (Requires simple QRs)
-        const FLASH_MS = 80; 
-        
-        // 150 Chars = Very simple QR (Version 6-8). Easy to scan.
-        const CHUNK_SIZE = 150; 
-        
-        // 200px = Tiny image to keep packet count low
-        const IMG_MAX_PX = 200; 
+/* ================= SPEED CONTROL ================= */
+speed.oninput=e=>{
+    FLASH_MS=parseInt(e.target.value);
+    const hz=(1000/FLASH_MS).toFixed(1);
+    hz.innerText="";
+    document.getElementById("hz").innerText=
+        `Speed: ${FLASH_MS}ms (${hz}Hz)`;
+};
 
-        // --- VARS ---
-        let sendInt = null;
-        let qr = null;
-        let packets = [];
-        
-        let scanning = false;
-        let stream = null;
-        let rxPackets = {};
-        let rxTotal = 0;
-        let done = false;
+/* ================= SEND ================= */
+async function startSend(){
+    clearInterval(sendInt);
+    let data="";
 
-        // --- NAV ---
-        function switchView(v) {
-            document.querySelectorAll('.view').forEach(e => e.classList.remove('active'));
-            document.getElementById('view-'+v).classList.add('active');
-            
-            document.getElementById('btn-send').classList.toggle('active', v==='send');
-            document.getElementById('btn-receive').classList.toggle('active', v==='receive');
+    if(txt-in.value.trim()){
+        data="T:"+txt-in.value;
+    }else if(file-in.files[0]){
+        data="I:"+await compress(file-in.files[0]);
+    }else return;
 
-            if(v==='send') stopCam();
-            else { stopSend(); startCam(); }
-        }
+    packets=[];
+    let total=Math.ceil(data.length/CHUNK);
+    for(let i=0;i<total;i++){
+        packets.push(`${i}|${total}|${data.substr(i*CHUNK,CHUNK)}`);
+    }
 
-        // --- SEND LOGIC ---
-        async function inputHandler(type) {
-            stopSend();
-            let data = "";
+    qr=new QRCode(qr-display,{width:300,height:300,
+        correctLevel:QRCode.CorrectLevel.L});
+    qr.makeCode(packets[0]);
 
-            if(type === 'txt') {
-                const val = document.getElementById('txt-in').value;
-                if(val) data = "T:" + val;
-            } else {
-                const file = document.getElementById('file-in').files[0];
-                if(file) {
-                    document.getElementById('stats').innerText = "Compressing...";
-                    data = "I:" + await compress(file);
-                }
-            }
+    let i=0;
+    sendInt=setInterval(()=>{
+        i=(i+1)%packets.length;
+        qr.makeCode(packets[i]);
+    },FLASH_MS);
+}
 
-            if(data) buildPackets(data);
-        }
+function compress(file){
+return new Promise(res=>{
+    let r=new FileReader();
+    r.onload=e=>{
+        let img=new Image();
+        img.onload=()=>{
+            let c=document.createElement("canvas");
+            let w=img.width,h=img.height;
+            if(w>h){ if(w>IMG_MAX){ h*=IMG_MAX/w; w=IMG_MAX; } }
+            else{ if(h>IMG_MAX){ w*=IMG_MAX/h; h=IMG_MAX; } }
+            c.width=w; c.height=h;
+            c.getContext("2d").drawImage(img,0,0,w,h);
+            res(c.toDataURL("image/jpeg",0.35));
+        };
+        img.src=e.target.result;
+    };
+    r.readAsDataURL(file);
+});
+}
 
-        function compress(file) {
-            return new Promise(resolve => {
-                const reader = new FileReader();
-                reader.onload = e => {
-                    const img = new Image();
-                    img.onload = () => {
-                        const cvs = document.getElementById('compressor');
-                        let w = img.width, h = img.height;
-                        
-                        // Resize logic
-                        if(w>h) { if(w>IMG_MAX_PX) { h*=IMG_MAX_PX/w; w=IMG_MAX_PX; } }
-                        else { if(h>IMG_MAX_PX) { w*=IMG_MAX_PX/h; h=IMG_MAX_PX; } }
+/* ================= RECEIVE ================= */
+navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}})
+.then(s=>{
+    stream=s;
+    video.srcObject=s;
+    video.play();
+    requestAnimationFrame(scanLoop);
+});
 
-                        cvs.width = w; cvs.height = h;
-                        const ctx = cvs.getContext('2d');
-                        ctx.drawImage(img,0,0,w,h);
-                        
-                        // Heavy compression (0.3)
-                        resolve(cvs.toDataURL('image/jpeg', 0.3));
-                    };
-                    img.src = e.target.result;
-                };
-                reader.readAsDataURL(file);
-            });
-        }
+function scanLoop(){
+    if(!scanning) return;
 
-        function buildPackets(str) {
-            packets = [];
-            const count = Math.ceil(str.length / CHUNK_SIZE);
-            
-            for(let i=0; i<count; i++) {
-                // Header: i|total|data
-                packets.push(`${i}|${count}|${str.substr(i*CHUNK_SIZE, CHUNK_SIZE)}`);
-            }
+    scan.width=video.videoWidth;
+    scan.height=video.videoHeight;
+    scan.getContext("2d").drawImage(video,0,0);
 
-            document.getElementById('stats').innerText = `Packets: ${count}. Speed: 12Hz`;
-            
-            // Init QR
-            const el = document.getElementById('qr-display');
-            el.innerHTML = "";
-            qr = new QRCode(el, {
-                width: 350,
-                height: 350,
-                correctLevel: QRCode.CorrectLevel.L // Lowest ECC for easiest scanning
-            });
+    let img=scan.getContext("2d")
+        .getImageData(0,0,scan.width,scan.height);
 
-            startFlash();
-        }
+    let code=jsQR(img.data,img.width,img.height);
 
-        function startFlash() {
-            let i = 0;
-            qr.makeCode(packets[0]); // First frame
+    if(code) handlePacket(code.data);
 
-            sendInt = setInterval(() => {
-                if(!packets.length) return;
-                i++;
-                if(i >= packets.length) i = 0;
-                qr.makeCode(packets[i]);
-            }, FLASH_MS);
-        }
+    requestAnimationFrame(scanLoop);
+}
 
-        function stopSend() {
-            clearInterval(sendInt);
-            document.getElementById('qr-display').innerHTML = "";
-            packets = [];
-            document.getElementById('stats').innerText = "Ready";
-        }
+function handlePacket(str){
+    let p=str.split("|");
+    if(p.length<3) return;
 
-        // --- RECEIVE LOGIC ---
-        async function startCam() {
-            if(done) return;
-            resetUI();
-            
-            try {
-                const v = document.getElementById('video');
-                stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "environment" } 
-                });
-                v.srcObject = stream;
-                v.setAttribute("playsinline", true);
-                v.play();
-                scanning = true;
-                requestAnimationFrame(tick);
-            } catch(e) { console.error(e); }
-        }
+    let idx=parseInt(p[0]);
+    let tot=parseInt(p[1]);
+    let payload=p.slice(2).join("|");
 
-        function stopCam() {
-            scanning = false;
-            if(stream) stream.getTracks().forEach(t=>t.stop());
-        }
+    if(!rxTotal) rxTotal=tot;
+    if(tot!==rxTotal) return;
 
-        function tick() {
-            if(!scanning) return;
-            const v = document.getElementById('video');
-            if(v.readyState === v.HAVE_ENOUGH_DATA) {
-                const cvs = document.getElementById('scan-canvas');
-                const ctx = cvs.getContext('2d');
-                cvs.width = v.videoWidth;
-                cvs.height = v.videoHeight;
-                ctx.drawImage(v,0,0);
-                
-                const imgData = ctx.getImageData(0,0,cvs.width,cvs.height);
-                const code = jsQR(imgData.data, imgData.width, imgData.height, {
-                    inversionAttempts: "dontInvert"
-                });
+    if(!rxPackets[idx]){
+        rxPackets[idx]=payload;
+        updateProgress();
+    }
+}
 
-                if(code && code.data) handleData(code.data);
-            }
-            requestAnimationFrame(tick);
-        }
+function updateProgress(){
+    let count=Object.keys(rxPackets).length;
+    progress-fill.style.width=
+        (count/rxTotal*100)+"%";
 
-        function handleData(str) {
-            // Parse: idx|tot|payload
-            const p1 = str.indexOf('|');
-            const p2 = str.indexOf('|', p1+1);
-            if(p1<0 || p2<0) return;
+    if(count===rxTotal) finish();
+}
 
-            const idx = parseInt(str.substring(0,p1));
-            const tot = parseInt(str.substring(p1+1, p2));
-            const pl = str.substring(p2+1);
+function finish(){
+    scanning=false;
+    stream.getTracks().forEach(t=>t.stop());
 
-            if(isNaN(idx) || isNaN(tot)) return;
+    let full="";
+    for(let i=0;i<rxTotal;i++){
+        full+=rxPackets[i]||"";
+    }
 
-            if(rxTotal === 0) rxTotal = tot;
-            if(rxTotal !== tot) return; // Wrong session
+    let type=full.substring(0,2);
+    let content=full.substring(2);
 
-            if(!rxPackets[idx]) {
-                rxPackets[idx] = pl;
-                updateProg();
-            }
-        }
+    result.innerHTML="";
 
-        function updateProg() {
-            const count = Object.keys(rxPackets).length;
-            const pct = Math.round((count/rxTotal)*100);
-            
-            document.getElementById('progress-fill').style.width = pct+"%";
-            document.getElementById('progress-txt').innerText = `${count}/${rxTotal}`;
+    if(type==="I:"){
+        let img=new Image();
+        img.src=content;
+        result.appendChild(img);
+    }else{
+        result.innerText=content;
+    }
 
-            if(count === rxTotal) finish();
-        }
+    modal.classList.add("open");
+}
 
-        function finish() {
-            done = true;
-            stopCam();
-            
-            // Reconstruct
-            let full = "";
-            for(let i=0; i<rxTotal; i++) full += rxPackets[i] || "";
-
-            const type = full.substring(0,2);
-            const content = full.substring(2);
-            const box = document.getElementById('modal-body');
-            box.innerHTML = "";
-
-            if(type === "I:") {
-                const img = document.createElement('img');
-                img.src = content;
-                box.appendChild(img);
-                box.innerHTML += "<div>Image Received</div>";
-            } else {
-                box.innerText = content;
-            }
-            
-            document.getElementById('modal').classList.add('open');
-        }
-
-        function closeModal() {
-            document.getElementById('modal').classList.remove('open');
-            resetReceive();
-        }
-
-        function resetUI() {
-            document.getElementById('progress-fill').style.width = "0%";
-            document.getElementById('progress-txt').innerText = "0%";
-        }
-
-        function resetReceive() {
-            rxPackets = {};
-            rxTotal = 0;
-            done = false;
-            resetUI();
-            stopCam();
-            startCam();
-        }
-    </script>
+function closeModal(){
+    modal.classList.remove("open");
+    location.reload();
+}
+</script>
 </body>
 </html>
