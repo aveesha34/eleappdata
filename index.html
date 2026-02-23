@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Rapid Transfer v2</title>
+    <title>Rapid Transfer v3</title>
     
     <!-- Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -29,21 +29,21 @@
             height: 100vh;
             display: flex;
             flex-direction: column;
-            overflow: hidden; /* Prevent scrolling, app-like feel */
+            overflow: hidden; 
         }
 
         /* --- NAVIGATION --- */
         .nav {
             display: flex;
             background: var(--surface);
-            padding: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+            padding: 0;
             z-index: 10;
+            border-bottom: 1px solid #333;
         }
 
         .nav button {
             flex: 1;
-            padding: 12px;
+            padding: 15px;
             background: transparent;
             border: none;
             color: #666;
@@ -56,130 +56,124 @@
 
         .nav button.active {
             color: var(--text);
+            background: #222;
             border-bottom: 3px solid var(--primary);
         }
 
-        /* --- VIEW CONTAINER --- */
+        /* --- MAIN LAYOUT --- */
         #main-container {
             flex: 1;
-            position: relative;
             width: 100%;
             display: flex;
             justify-content: center;
+            overflow-y: auto;
         }
 
         .view {
             display: none;
             width: 100%;
-            height: 100%;
+            max-width: 600px; /* Constrain width for readability on PC */
             flex-direction: column;
             align-items: center;
-            overflow-y: auto;
             padding: 20px;
         }
         .view.active { display: flex; }
 
-        /* --- PC SPECIFIC DESIGN (Default / Min-Width 800px) --- */
-        @media (min-width: 800px) {
-            body { align-items: center; justify-content: center; background: #111; }
-            #app-shell {
-                width: 700px;
-                height: 80vh;
-                background: var(--bg);
-                border: 1px solid #333;
-                box-shadow: 0 0 30px rgba(0,255,157,0.1);
-                display: flex;
-                flex-direction: column;
-                border-radius: 8px;
-                overflow: hidden;
-            }
-            .nav { padding: 0; }
-            .nav button { padding: 15px; }
-            #qr-display { width: 300px; height: 300px; }
-            #cam-box { width: 400px; height: 300px; }
-        }
-
-        /* --- MOBILE SPECIFIC DESIGN (Max-Width 799px) --- */
-        @media (max-width: 799px) {
-            #app-shell { width: 100%; height: 100%; display: flex; flex-direction: column; }
-            
-            /* Receiver on Mobile: Full Screen Camera */
-            #view-receive.active { padding: 0; justify-content: flex-start; }
-            #cam-box { width: 100%; flex: 1; border: none; max-width: none; border-radius: 0; }
-            #video { object-fit: cover; }
-            
-            /* Controls overlay on mobile receive */
-            .mobile-controls {
-                position: absolute;
-                bottom: 20px;
-                left: 5%;
-                width: 90%;
-                background: rgba(0,0,0,0.8);
-                padding: 15px;
-                border-radius: 12px;
-                border: 1px solid #333;
-                z-index: 20;
-            }
-        }
-
-        /* --- SENDER COMPONENTS --- */
-        .input-group { width: 100%; max-width: 400px; margin-bottom: 15px; }
+        /* --- SENDER INPUTS --- */
+        .input-group { width: 100%; margin-bottom: 20px; }
         
         textarea {
-            width: 100%; background: #222; border: 1px solid #444; 
-            color: white; padding: 10px; border-radius: 4px; resize: none;
+            width: 100%; background: #151515; border: 1px solid #333; 
+            color: white; padding: 15px; border-radius: 8px; resize: none;
+            font-size: 1rem;
         }
 
         input[type="file"] {
-            width: 100%; padding: 10px; background: #222; border: 1px solid #444; color: #888;
+            width: 100%; padding: 15px; background: #151515; 
+            border: 1px solid #333; color: #888; border-radius: 8px;
         }
 
-        #qr-display {
-            background: #fff;
-            padding: 10px;
-            margin: 10px 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            border-radius: 4px;
-            /* Ensure QR doesn't jump sizes */
-            min-width: 250px; 
-            min-height: 250px;
-        }
-        #qr-display img { display: block; } /* Fix QR spacing */
-
-        /* SLIDER STYLES */
+        /* SLIDER */
         .slider-container {
-            width: 100%; max-width: 400px;
-            background: #222; padding: 10px; border-radius: 4px;
-            margin-bottom: 15px; text-align: center;
+            width: 100%;
+            background: #151515; padding: 15px; border-radius: 8px;
+            margin-bottom: 20px; text-align: center;
+            border: 1px solid #333;
         }
-        input[type=range] { width: 100%; accent-color: var(--primary); }
-        .label-row { display: flex; justify-content: space-between; font-size: 0.8rem; color: #888; margin-bottom: 5px; }
+        input[type=range] { width: 100%; accent-color: var(--primary); cursor: pointer; }
+        .label-row { display: flex; justify-content: space-between; font-size: 0.9rem; color: #aaa; margin-bottom: 10px; }
 
-        /* --- RECEIVER COMPONENTS --- */
+        /* --- BUTTONS --- */
+        .btn {
+            background: var(--primary); color: #000; border: none;
+            padding: 15px 30px; font-weight: bold; cursor: pointer;
+            border-radius: 50px; text-transform: uppercase;
+            font-size: 1rem; transition: transform 0.1s;
+            width: 100%;
+        }
+        .btn:active { transform: scale(0.98); }
+        .btn:disabled { background: #333; color: #555; cursor: not-allowed; }
+
+        /* --- FULL SCREEN QR OVERLAY --- */
+        #fs-overlay {
+            display: none;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 9999;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #qr-target {
+            background: #fff;
+            padding: 10px; /* White border around QR */
+            /* Size handled by JS */
+        }
+        #qr-target img { display: block; }
+
+        #btn-close-fs {
+            position: absolute;
+            bottom: 30px;
+            background: rgba(255, 68, 68, 0.9);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 30px;
+            font-weight: bold;
+            font-size: 1.2rem;
+            cursor: pointer;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+        }
+
+        /* --- RECEIVER --- */
         #cam-box {
             position: relative;
             background: #000;
+            width: 100%;
+            aspect-ratio: 9/16; /* Mobile portrait ratio default */
+            max-height: 70vh;
             overflow: hidden;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            border-radius: 12px;
+            border: 1px solid #333;
         }
-        video { width: 100%; height: 100%; }
+        @media(min-width: 800px) {
+            #cam-box { aspect-ratio: 4/3; }
+        }
+
+        video { width: 100%; height: 100%; object-fit: cover; }
 
         #progress-wrap {
-            width: 100%; height: 8px; background: #333; border-radius: 4px;
-            margin-top: 10px; overflow: hidden; position: relative;
+            width: 100%; height: 10px; background: #333; border-radius: 5px;
+            margin-top: 15px; overflow: hidden;
         }
         #progress-fill { height: 100%; width: 0%; background: var(--primary); transition: width 0.1s; }
-        #rx-stats { text-align: center; margin-top: 5px; font-family: monospace; color: var(--primary); }
+        #rx-stats { text-align: center; margin-top: 10px; font-family: monospace; color: #888; }
 
         /* --- MODAL (RESULT) --- */
         #modal {
             display: none;
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.95); z-index: 100;
+            background: rgba(0,0,0,0.95); z-index: 200;
             justify-content: center; align-items: center;
             flex-direction: column;
             padding: 20px;
@@ -189,99 +183,86 @@
         #modal-content {
             background: #151515; border: 1px solid #333; padding: 20px;
             max-width: 500px; width: 100%; max-height: 80vh;
-            overflow-y: auto; text-align: center; border-radius: 8px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+            overflow-y: auto; text-align: center; border-radius: 12px;
         }
-
         #modal-image-container {
-            margin: 15px 0;
-            min-height: 100px;
-            background: #222; /* Ensure transparent imgs are visible */
+            margin: 15px 0; min-height: 100px; background: #222;
             display: flex; justify-content: center; align-items: center;
-            border: 1px dashed #444;
         }
+        #modal-img { max-width: 100%; display: block; border: 1px solid #fff; }
 
-        #modal-img {
-            max-width: 100%; display: block;
-            border: 1px solid #fff; /* White border to separate from black bg */
-        }
-
-        .btn {
-            background: var(--primary); color: #000; border: none;
-            padding: 10px 20px; font-weight: bold; cursor: pointer;
-            border-radius: 4px; text-transform: uppercase;
-        }
-        .btn-stop { background: var(--danger); color: white; }
     </style>
 </head>
 <body>
 
-<div id="app-shell">
-    <div class="nav">
-        <button onclick="switchView('send')" id="btn-send" class="active">Send Data</button>
-        <button onclick="switchView('receive')" id="btn-receive">Scanner</button>
-    </div>
-
-    <div id="main-container">
-        
-        <!-- SENDER VIEW -->
-        <div id="view-send" class="view active">
-            <div class="input-group">
-                <textarea id="txt-in" rows="2" placeholder="Enter text message..." oninput="handleInput('txt')"></textarea>
-                <div style="text-align: center; margin: 5px 0; color:#555; font-size:0.8rem;">- OR -</div>
-                <input type="file" id="file-in" accept="image/*" onchange="handleInput('img')">
-            </div>
-
-            <!-- SPEED CONTROL -->
-            <div class="slider-container">
-                <div class="label-row">
-                    <span>Speed: <span id="speed-val">100</span>ms</span>
-                    <span style="color:var(--primary)">Faster &rarr;</span>
-                </div>
-                <input type="range" id="speed-slider" min="30" max="300" value="100" step="10" oninput="updateSpeed(this.value)">
-            </div>
-
-            <div id="qr-display"></div>
-            <div id="tx-stats" style="color:#888; font-size: 0.9rem; margin-top:5px;">Waiting for input...</div>
-            
-            <button class="btn btn-stop" onclick="stopSend()" style="margin-top:15px; width:100%; max-width:200px;">Stop Broadcasting</button>
-        </div>
-
-        <!-- RECEIVER VIEW -->
-        <div id="view-receive" class="view">
-            <div id="cam-box">
-                <video id="video" playsinline muted></video>
-                <canvas id="scan-canvas" style="display:none;"></canvas>
-            </div>
-            
-            <div class="mobile-controls">
-                <div id="progress-wrap">
-                    <div id="progress-fill"></div>
-                </div>
-                <div id="rx-stats">0 / 0 Packets</div>
-                <div style="text-align:center; margin-top:10px;">
-                    <button class="btn" onclick="resetReceiver()">Reset Scanner</button>
-                </div>
-            </div>
-        </div>
-
-    </div>
+<!-- Navigation -->
+<div class="nav">
+    <button onclick="switchView('send')" id="btn-send" class="active">Send Data</button>
+    <button onclick="switchView('receive')" id="btn-receive">Receive Data</button>
 </div>
 
-<!-- MODAL -->
-<div id="modal">
-    <div id="modal-content">
-        <h2 style="color:var(--primary); margin:0;">Transfer Complete</h2>
+<div id="main-container">
+    
+    <!-- SENDER VIEW -->
+    <div id="view-send" class="view active">
+        <h2 style="color: #666; margin-bottom: 20px;">Source Data</h2>
         
-        <!-- Image Result -->
-        <div id="modal-image-container" style="display:none;">
-            <img id="modal-img" alt="Received Image">
+        <div class="input-group">
+            <textarea id="txt-in" rows="3" placeholder="Type text here..." oninput="prepareData('txt')"></textarea>
+            <div style="text-align: center; margin: 10px 0; color:#444; font-weight:bold;">- OR -</div>
+            <input type="file" id="file-in" accept="image/*" onchange="prepareData('img')">
+        </div>
+
+        <!-- SPEED CONTROL -->
+        <div class="slider-container">
+            <div class="label-row">
+                <span>Flash Speed: <span id="speed-val">100</span>ms</span>
+                <span style="color:var(--primary)">Faster &rarr;</span>
+            </div>
+            <input type="range" id="speed-slider" min="30" max="300" value="100" step="10" oninput="updateSpeed(this.value)">
+        </div>
+
+        <div id="prep-stats" style="color:var(--primary); margin-bottom: 15px; min-height: 20px;"></div>
+        
+        <!-- Trigger Button -->
+        <button id="btn-broadcast" class="btn" onclick="goFullScreen()" disabled>Start Broadcasting</button>
+    </div>
+
+    <!-- RECEIVER VIEW -->
+    <div id="view-receive" class="view">
+        <div id="cam-box">
+            <video id="video" playsinline muted></video>
+            <canvas id="scan-canvas" style="display:none;"></canvas>
         </div>
         
-        <!-- Text Result -->
+        <div style="width:100%">
+            <div id="progress-wrap">
+                <div id="progress-fill"></div>
+            </div>
+            <div id="rx-stats">Waiting for camera...</div>
+            <div style="text-align:center; margin-top:20px;">
+                <button class="btn" onclick="resetReceiver()" style="background:transparent; border:1px solid var(--primary); color:var(--primary);">Reset</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- FULL SCREEN QR OVERLAY -->
+<div id="fs-overlay">
+    <div id="qr-target"></div>
+    <button id="btn-close-fs" onclick="stopBroadcast()">STOP BROADCAST</button>
+</div>
+
+<!-- RESULT MODAL -->
+<div id="modal">
+    <div id="modal-content">
+        <h2 style="color:var(--primary); margin-top:0;">Transfer Complete</h2>
+        <div id="modal-image-container" style="display:none;">
+            <img id="modal-img" alt="Received">
+        </div>
         <p id="modal-text" style="word-break: break-all; color:#ddd; font-family:monospace; margin:15px 0;"></p>
-        
-        <button class="btn" onclick="closeModal()">Close & Restart</button>
+        <button class="btn" onclick="closeModal()">Done</button>
     </div>
 </div>
 
@@ -289,23 +270,24 @@
 <canvas id="compressor" style="display:none;"></canvas>
 
 <script>
-    // --- CONFIGURATION ---
+    // --- CONFIG ---
     let FLASH_MS = 100; 
-    const CHUNK_SIZE = 120; // Safe size for low density QRs
-    const IMG_MAX_PX = 300; // Increased size for better visibility
+    const CHUNK_SIZE = 150; 
+    const IMG_MAX_PX = 300; 
 
-    // --- STATE VARIABLES ---
+    // --- STATE ---
     let sendTimer = null;
     let qrObj = null;
     let packets = [];
+    let pendingPayload = null; // Data ready to be turned into packets
     
     let isScanning = false;
     let stream = null;
     let rxData = {};
-    let rxTotalPackets = 0;
-    let rxCurrentCount = 0;
+    let rxTotal = 0;
+    let rxCount = 0;
 
-    // --- VIEW SWITCHING ---
+    // --- NAV ---
     function switchView(mode) {
         document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
         document.querySelectorAll('.nav button').forEach(el => el.classList.remove('active'));
@@ -313,44 +295,47 @@
         document.getElementById('view-' + mode).classList.add('active');
         document.getElementById('btn-' + mode).classList.add('active');
 
-        if(mode === 'send') {
-            stopCamera();
-        } else {
-            stopSend();
+        if(mode === 'send') stopCamera();
+        else {
+            // Only start camera if switching to receive
             startCamera();
         }
     }
 
-    // --- SENDER LOGIC ---
+    // --- PREPARE DATA ---
     function updateSpeed(val) {
         FLASH_MS = parseInt(val);
         document.getElementById('speed-val').innerText = FLASH_MS;
-        // Restart loop if currently sending
-        if(packets.length > 0) {
-            startLoop(); 
-        }
+        // If live, restart loop
+        if(sendTimer) startLoop();
     }
 
-    async function handleInput(type) {
-        stopSend();
-        let payload = "";
+    async function prepareData(type) {
+        const btn = document.getElementById('btn-broadcast');
+        const stats = document.getElementById('prep-stats');
+        
+        btn.disabled = true;
+        pendingPayload = null;
 
         if(type === 'txt') {
             const val = document.getElementById('txt-in').value;
-            if(!val) return;
-            payload = "TXT:" + val;
-            processPayload(payload);
+            if(val) {
+                pendingPayload = "TXT:" + val;
+                stats.innerText = "Text ready (" + val.length + " chars)";
+                btn.disabled = false;
+            }
         } else {
             const file = document.getElementById('file-in').files[0];
-            if(!file) return;
-            document.getElementById('tx-stats').innerText = "Compressing image...";
-            
-            // Wait for UI to update before crunching image
-            setTimeout(async () => {
-                const base64 = await compressImage(file);
-                payload = "IMG:" + base64;
-                processPayload(payload);
-            }, 50);
+            if(file) {
+                stats.innerText = "Processing image...";
+                // Small delay to allow UI update
+                setTimeout(async () => {
+                    const base64 = await compressImage(file);
+                    pendingPayload = "IMG:" + base64;
+                    stats.innerText = "Image ready";
+                    btn.disabled = false;
+                }, 50);
+            }
         }
     }
 
@@ -360,27 +345,17 @@
             reader.onload = e => {
                 const img = new Image();
                 img.onload = () => {
-                    const canvas = document.getElementById('compressor');
-                    let w = img.width;
-                    let h = img.height;
-
-                    // Aspect Ratio Resize
-                    if (w > h) {
-                        if (w > IMG_MAX_PX) { h *= IMG_MAX_PX / w; w = IMG_MAX_PX; }
-                    } else {
-                        if (h > IMG_MAX_PX) { w *= IMG_MAX_PX / h; h = IMG_MAX_PX; }
-                    }
-
-                    canvas.width = w;
-                    canvas.height = h;
-                    const ctx = canvas.getContext('2d');
-                    // Fill white background for transparent PNGs converted to JPEG
-                    ctx.fillStyle = "#FFFFFF";
-                    ctx.fillRect(0, 0, w, h);
-                    ctx.drawImage(img, 0, 0, w, h);
+                    const cvs = document.getElementById('compressor');
+                    let w = img.width, h = img.height;
+                    if(w>h) { if(w>IMG_MAX_PX) { h*=IMG_MAX_PX/w; w=IMG_MAX_PX; } }
+                    else { if(h>IMG_MAX_PX) { w*=IMG_MAX_PX/h; h=IMG_MAX_PX; } }
                     
-                    // Compress to JPEG 0.5 quality
-                    resolve(canvas.toDataURL('image/jpeg', 0.5));
+                    cvs.width = w; cvs.height = h;
+                    const ctx = cvs.getContext('2d');
+                    ctx.fillStyle = "#FFFFFF"; // Fix for transparent PNGs
+                    ctx.fillRect(0,0,w,h);
+                    ctx.drawImage(img,0,0,w,h);
+                    resolve(cvs.toDataURL('image/jpeg', 0.5));
                 };
                 img.src = e.target.result;
             };
@@ -388,169 +363,151 @@
         });
     }
 
-    function processPayload(str) {
+    // --- BROADCAST (FULL SCREEN) ---
+    function goFullScreen() {
+        if(!pendingPayload) return;
+
+        // 1. Build Packets
         packets = [];
-        const total = Math.ceil(str.length / CHUNK_SIZE);
-        
+        const total = Math.ceil(pendingPayload.length / CHUNK_SIZE);
         for(let i=0; i<total; i++) {
-            // Format: Index|Total|Data
-            const chunk = str.substr(i*CHUNK_SIZE, CHUNK_SIZE);
-            packets.push(`${i}|${total}|${chunk}`);
+            packets.push(`${i}|${total}|${pendingPayload.substr(i*CHUNK_SIZE, CHUNK_SIZE)}`);
         }
 
-        document.getElementById('tx-stats').innerText = `Broadcasting ${packets.length} packets...`;
-        
-        // Init QR Container
-        const container = document.getElementById('qr-display');
-        container.innerHTML = ""; 
-        
-        qrObj = new QRCode(container, {
-            width: 250,
-            height: 250,
+        // 2. Open Overlay
+        const overlay = document.getElementById('fs-overlay');
+        overlay.style.display = 'flex';
+
+        // 3. Calc QR Size (Max Square that fits)
+        // Leave 100px padding for button and margins
+        const size = Math.min(window.innerWidth, window.innerHeight) - 80;
+
+        // 4. Init QR
+        const target = document.getElementById('qr-target');
+        target.innerHTML = "";
+        qrObj = new QRCode(target, {
+            width: size,
+            height: size,
             correctLevel: QRCode.CorrectLevel.L
         });
 
+        // 5. Start Loop
         startLoop();
     }
 
     function startLoop() {
         if(sendTimer) clearInterval(sendTimer);
-        let index = 0;
+        let i = 0;
+        if(packets.length) qrObj.makeCode(packets[0]);
         
-        // Render first frame immediately
-        if(packets.length > 0) qrObj.makeCode(packets[0]);
-
         sendTimer = setInterval(() => {
             if(!packets.length) return;
-            index = (index + 1) % packets.length;
-            qrObj.makeCode(packets[index]);
+            i = (i + 1) % packets.length;
+            qrObj.makeCode(packets[i]);
         }, FLASH_MS);
     }
 
-    function stopSend() {
-        if(sendTimer) clearInterval(sendTimer);
-        document.getElementById('qr-display').innerHTML = "";
-        packets = [];
-        document.getElementById('tx-stats').innerText = "Stopped.";
+    function stopBroadcast() {
+        clearInterval(sendTimer);
+        sendTimer = null;
+        document.getElementById('fs-overlay').style.display = 'none';
+        document.getElementById('qr-target').innerHTML = ""; // Clean up memory
     }
 
-    // --- RECEIVER LOGIC ---
+    // --- RECEIVER ---
     async function startCamera() {
         if(isScanning) return;
         resetUI();
-        
         try {
-            const video = document.getElementById('video');
+            const v = document.getElementById('video');
             stream = await navigator.mediaDevices.getUserMedia({ 
                 video: { facingMode: "environment" } 
             });
-            video.srcObject = stream;
-            video.play();
+            v.srcObject = stream;
+            v.play();
             isScanning = true;
-            requestAnimationFrame(scanFrame);
-        } catch(err) {
-            alert("Camera access denied or failed: " + err);
+            requestAnimationFrame(tick);
+            document.getElementById('rx-stats').innerText = "Scanning...";
+        } catch(e) {
+            document.getElementById('rx-stats').innerText = "Camera Error: " + e.message;
         }
     }
 
     function stopCamera() {
         isScanning = false;
         if(stream) {
-            stream.getTracks().forEach(track => track.stop());
+            stream.getTracks().forEach(t => t.stop());
             stream = null;
         }
     }
 
-    function scanFrame() {
+    function tick() {
         if(!isScanning) return;
-        
-        const video = document.getElementById('video');
-        if(video.readyState === video.HAVE_ENOUGH_DATA) {
-            const canvas = document.getElementById('scan-canvas');
-            const ctx = canvas.getContext('2d');
+        const v = document.getElementById('video');
+        if(v.readyState === v.HAVE_ENOUGH_DATA) {
+            const cvs = document.getElementById('scan-canvas');
+            const ctx = cvs.getContext('2d');
+            cvs.width = v.videoWidth;
+            cvs.height = v.videoHeight;
+            ctx.drawImage(v,0,0);
             
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const code = jsQR(imageData.data, imageData.width, imageData.height, {
-                inversionAttempts: "dontInvert",
+            const imgData = ctx.getImageData(0,0,cvs.width,cvs.height);
+            const code = jsQR(imgData.data, imgData.width, imgData.height, {
+                inversionAttempts: "dontInvert"
             });
 
-            if(code && code.data) {
-                parseQR(code.data);
-            }
+            if(code && code.data) handlePacket(code.data);
         }
-        requestAnimationFrame(scanFrame);
+        requestAnimationFrame(tick);
     }
 
-    function parseQR(raw) {
-        // Expected: Index|Total|Payload
-        const p1 = raw.indexOf('|');
-        const p2 = raw.indexOf('|', p1 + 1);
+    function handlePacket(str) {
+        const p1 = str.indexOf('|');
+        const p2 = str.indexOf('|', p1+1);
+        if(p1<0 || p2<0) return;
+
+        const idx = parseInt(str.substring(0,p1));
+        const tot = parseInt(str.substring(p1+1, p2));
+        const pl = str.substring(p2+1);
         
-        if(p1 === -1 || p2 === -1) return; // Invalid packet
+        if(isNaN(idx) || isNaN(tot)) return;
 
-        const idx = parseInt(raw.substring(0, p1));
-        const total = parseInt(raw.substring(p1+1, p2));
-        const data = raw.substring(p2+1);
-
-        if(isNaN(idx) || isNaN(total)) return;
-
-        // New session detection
-        if(rxTotalPackets === 0) rxTotalPackets = total;
-        if(rxTotalPackets !== total) return; // Ignoring packet from different session
+        if(rxTotal === 0) rxTotal = tot;
+        if(rxTotal !== tot) return; // Different stream
 
         if(!rxData[idx]) {
-            rxData[idx] = data;
-            rxCurrentCount++;
-            updateProgress();
+            rxData[idx] = pl;
+            rxCount++;
             
-            // Visual feedback (Flash border green)
-            const camBox = document.getElementById('cam-box');
-            camBox.style.border = "4px solid var(--primary)";
-            setTimeout(() => camBox.style.border = "none", 100);
+            // UI Update
+            const pct = Math.floor((rxCount/rxTotal)*100);
+            document.getElementById('progress-fill').style.width = pct+"%";
+            document.getElementById('rx-stats').innerText = `${rxCount}/${rxTotal} Packets`;
+
+            if(rxCount >= rxTotal) finish();
         }
     }
 
-    function updateProgress() {
-        const pct = Math.floor((rxCurrentCount / rxTotalPackets) * 100);
-        document.getElementById('progress-fill').style.width = pct + "%";
-        document.getElementById('rx-stats').innerText = `${rxCurrentCount} / ${rxTotalPackets} Packets`;
-
-        if(rxCurrentCount >= rxTotalPackets) {
-            finishReceive();
-        }
-    }
-
-    function finishReceive() {
+    function finish() {
         isScanning = false;
         stopCamera();
 
-        // Reassemble
-        let fullString = "";
-        for(let i=0; i<rxTotalPackets; i++) {
-            fullString += rxData[i] || "";
-        }
+        let raw = "";
+        for(let i=0; i<rxTotal; i++) raw += rxData[i] || "";
 
-        const type = fullString.substring(0, 4); // "IMG:" or "TXT:"
-        const content = fullString.substring(4);
-
-        const imgBox = document.getElementById('modal-image-container');
-        const txtBox = document.getElementById('modal-text');
-        const imgEl = document.getElementById('modal-img');
-
+        const type = raw.substring(0,4);
+        const content = raw.substring(4);
+        
         if(type === "IMG:") {
-            imgBox.style.display = "flex";
-            txtBox.style.display = "none";
-            imgEl.src = content; 
+            document.getElementById('modal-image-container').style.display = 'flex';
+            document.getElementById('modal-text').style.display = 'none';
+            document.getElementById('modal-img').src = content;
         } else {
-            imgBox.style.display = "none";
-            txtBox.style.display = "block";
-            txtBox.innerText = content;
+            document.getElementById('modal-image-container').style.display = 'none';
+            document.getElementById('modal-text').style.display = 'block';
+            document.getElementById('modal-text').innerText = content;
         }
-
+        
         document.getElementById('modal').classList.add('open');
     }
 
@@ -560,11 +517,11 @@
     }
 
     function resetUI() {
-        document.getElementById('progress-fill').style.width = "0%";
-        document.getElementById('rx-stats').innerText = "Ready to scan";
         rxData = {};
-        rxTotalPackets = 0;
-        rxCurrentCount = 0;
+        rxTotal = 0;
+        rxCount = 0;
+        document.getElementById('progress-fill').style.width = "0%";
+        document.getElementById('rx-stats').innerText = "Ready";
     }
 
     function resetReceiver() {
@@ -573,6 +530,5 @@
         startCamera();
     }
 </script>
-
 </body>
 </html>
