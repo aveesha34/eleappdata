@@ -2,202 +2,384 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>POV Globe - Accel to Gyro</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dual-Channel Optical Link</title>
+    
+    <!-- External Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; }
-        canvas { display: block; }
-
-        #hud {
-            position: absolute;
-            top: 20px; left: 20px;
-            color: #00ffcc;
-            text-shadow: 0 0 5px #000;
-            pointer-events: none;
+        :root { --accent: #00ff88; --bg: #111; --panel: #222; }
+        body {
+            font-family: 'Segoe UI', monospace;
+            background: var(--bg); color: #eee;
+            margin: 0; height: 100vh;
+            display: flex; flex-direction: column;
+            overflow: hidden;
         }
 
-        #menu {
-            position: absolute;
-            bottom: 30px; left: 50%;
-            transform: translateX(-50%);
-            display: flex; gap: 10px;
-            z-index: 100;
-        }
+        /* TABS */
+        .nav { display: flex; background: #000; border-bottom: 1px solid #333; }
+        .nav-item { flex: 1; text-align: center; padding: 15px; cursor: pointer; color: #666; font-weight: bold; }
+        .nav-item.active { color: var(--accent); border-bottom: 2px solid var(--accent); background: #1a1a1a; }
 
+        /* PANELS */
+        .view { display: none; height: 100%; flex-direction: column; align-items: center; padding: 10px; }
+        .view.active { display: flex; }
+
+        /* SENDER LAYOUT */
+        #transmitter-stage {
+            display: flex; gap: 20px;
+            background: #000; padding: 20px;
+            border-radius: 10px; margin-bottom: 20px;
+            border: 1px solid #333;
+        }
+        .qr-box {
+            background: white; padding: 10px;
+            width: 200px; height: 200px;
+            display: flex; justify-content: center; align-items: center;
+        }
+        
+        /* RECEIVER LAYOUT */
+        #cam-wrapper {
+            position: relative; width: 100%; max-width: 600px;
+            aspect-ratio: 16/9; background: #000;
+            border: 2px solid #444; border-radius: 8px; overflow: hidden;
+        }
+        video { width: 100%; height: 100%; object-fit: cover; }
+        
+        /* SCAN ZONES OVERLAY */
+        .scan-overlay {
+            position: absolute; top: 0; bottom: 0; width: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            box-sizing: border-box;
+            display: flex; justify-content: center; align-items: center;
+        }
+        .scan-overlay.left { left: 0; border-right: 1px dashed var(--accent); }
+        .scan-overlay.right { right: 0; border-left: 1px dashed var(--accent); }
+        
+        .scan-indicator {
+            width: 10px; height: 10px; border-radius: 50%; background: #333;
+            transition: background 0.1s;
+        }
+        .scan-indicator.active { background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+
+        /* PROGRESS & CONTROLS */
+        .status-bar { width: 100%; max-width: 600px; height: 20px; background: #333; margin: 10px 0; position: relative; }
+        .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.2s; }
+        
+        .controls { display: flex; gap: 10px; margin-top: auto; padding: 20px; background: #1a1a1a; width: 100%; justify-content: center; }
         button {
-            background: rgba(0, 255, 204, 0.2);
-            color: #00ffcc;
-            border: 1px solid #00ffcc;
-            padding: 10px 15px;
-            border-radius: 5px;
-            cursor: pointer;
-            backdrop-filter: blur(5px);
-            font-size: 12px;
-            text-transform: uppercase;
+            padding: 10px 25px; border: none; background: var(--accent); color: #000; 
+            font-weight: bold; cursor: pointer; border-radius: 4px;
         }
+        input[type="range"] { accent-color: var(--accent); }
 
-        button.active {
-            background: #00ffcc;
-            color: #000;
+        #result-display {
+            margin-top: 10px; padding: 10px; background: #222; width: 90%; max-width: 600px;
+            max-height: 200px; overflow-y: auto; text-align: center;
         }
-
-        #overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8);
-            display: flex; align-items: center; justify-content: center;
-            z-index: 1000; color: white; text-align: center;
-        }
+        #result-display img { max-width: 100%; border: 1px solid #555; }
     </style>
 </head>
 <body>
 
-    <div id="overlay">
-        <div>
-            <h1>POV GLOBE</h1>
-            <p>Simulating Gyroscope via Accelerometer</p>
-            <button id="startBtn" style="font-size: 20px; padding: 20px 40px;">ENTER GLOBE</button>
-        </div>
+    <div class="nav">
+        <div class="nav-item active" onclick="setMode('tx')">TRANSMITTER (SEND)</div>
+        <div class="nav-item" onclick="setMode('rx')">RECEIVER (SCAN)</div>
     </div>
 
-    <div id="hud">
-        MODE: <span id="modeDisplay">High Quality</span><br>
-        PITCH: <span id="pitch">0</span>°<br>
-        ROLL: <span id="roll">0</span>°
-    </div>
-
-    <div id="menu">
-        <button onclick="setPreset('gyro')">Real Gyro-Like</button>
-        <button onclick="setPreset('precise')">Precise</button>
-        <button class="active" onclick="setPreset('hq')">High Quality</button>
-    </div>
-
-    <!-- Loading Three.js from CDN -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-
-    <script>
-        let scene, camera, renderer, globe;
-        let currentPitch = 0, currentRoll = 0;
-        let targetPitch = 0, targetRoll = 0;
+    <!-- SENDER -->
+    <div id="tx-view" class="view active">
+        <div class="meta">Status: <span id="tx-status">Idle</span></div>
         
-        // Physics Presets
-        const presets = {
-            gyro: { smoothing: 0.2, sensitivity: 1.5, noiseFilter: 0.01 },
-            precise: { smoothing: 0.05, sensitivity: 1.0, noiseFilter: 0.05 },
-            hq: { smoothing: 0.08, sensitivity: 1.2, noiseFilter: 0.02 }
+        <div id="transmitter-stage">
+            <div id="qr-l" class="qr-box"></div> <!-- Left Channel -->
+            <div id="qr-r" class="qr-box"></div> <!-- Right Channel -->
+        </div>
+
+        <div style="text-align:center; color:#888; font-size:0.8rem; margin-bottom:10px;">
+            Dual-Channel active. Point receiver at both codes.
+        </div>
+
+        <div class="controls">
+            <input type="file" id="file-in" hidden>
+            <button onclick="document.getElementById('file-in').click()">📁 Select Image</button>
+            <input type="text" id="text-in" placeholder="Or type text..." style="padding:10px;">
+            <button onclick="processInput('text')">Send Text</button>
+        </div>
+        
+        <label>Speed: <input type="range" id="speed-slider" min="50" max="500" value="150" oninput="restartTx()"> <span id="speed-disp">150ms</span></label>
+    </div>
+
+    <!-- RECEIVER -->
+    <div id="rx-view" class="view">
+        <div id="cam-wrapper">
+            <video id="webcam" playsinline autoplay muted></video>
+            <!-- Visual Guides -->
+            <div class="scan-overlay left"><div id="ind-l" class="scan-indicator"></div></div>
+            <div class="scan-overlay right"><div id="ind-r" class="scan-indicator"></div></div>
+        </div>
+
+        <div class="status-bar">
+            <div id="progress-bar" class="progress-fill"></div>
+        </div>
+        <div id="rx-status">Waiting for signal...</div>
+        
+        <div id="result-display"></div>
+        <button onclick="resetRx()" style="margin-top:10px; background:#e53935; color:white">Reset Receiver</button>
+    </div>
+
+    <!-- Hidden Canvases for processing -->
+    <canvas id="canvas-l" style="display:none"></canvas>
+    <canvas id="canvas-r" style="display:none"></canvas>
+
+<script>
+    // --- CONFIG ---
+    // Increase chunk size to take advantage of dual screens. 
+    // We keep Error Correction at Level 'L' to make the dots big and readable.
+    const CHUNK_LEN = 250; 
+    
+    // --- STATE ---
+    let chunks = [];
+    let txTimer = null;
+    let rxReq = null;
+    let receivedMap = {};
+    let totalChunks = 0;
+    let rxComplete = false;
+
+    // --- UI LOGIC ---
+    function setMode(mode) {
+        document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active'));
+        document.querySelectorAll('.view').forEach(e => e.classList.remove('active'));
+        
+        if(mode === 'tx') {
+            document.querySelector('.nav-item:nth-child(1)').classList.add('active');
+            document.getElementById('tx-view').classList.add('active');
+            stopCamera();
+        } else {
+            document.querySelector('.nav-item:nth-child(2)').classList.add('active');
+            document.getElementById('rx-view').classList.add('active');
+            startCamera();
+        }
+    }
+
+    // ==========================================
+    // TRANSMITTER LOGIC (Dual Channel)
+    // ==========================================
+
+    function restartTx() {
+        const speed = document.getElementById('speed-slider').value;
+        document.getElementById('speed-disp').innerText = speed + 'ms';
+        if(txTimer) {
+            clearInterval(txTimer);
+            startTxLoop();
+        }
+    }
+
+    // 1. Prepare Data
+    function processInput(type) {
+        if(type === 'text') {
+            const txt = document.getElementById('text-in').value;
+            if(txt) preparePayload(txt, 'T');
+        }
+    }
+
+    document.getElementById('file-in').addEventListener('change', e => {
+        const file = e.target.files[0];
+        if(!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            const img = new Image();
+            img.onload = () => {
+                const cvs = document.createElement('canvas');
+                // High Quality: 350px width
+                const scale = 350 / img.width;
+                cvs.width = 350;
+                cvs.height = img.height * scale;
+                const ctx = cvs.getContext('2d');
+                ctx.drawImage(img, 0, 0, cvs.width, cvs.height);
+                
+                // JPEG Quality 0.8 for better visual fidelity
+                preparePayload(cvs.toDataURL('image/jpeg', 0.8), 'I');
+            };
+            img.src = evt.target.result;
         };
-        let activePreset = presets.hq;
+        reader.readAsDataURL(file);
+    });
 
-        function init3D() {
-            scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    function preparePayload(data, type) {
+        chunks = [];
+        const total = Math.ceil(data.length / CHUNK_LEN);
+        
+        for(let i=0; i<total; i++) {
+            // Header: Index|Total|Type|Data
+            const part = data.substr(i * CHUNK_LEN, CHUNK_LEN);
+            chunks.push(`${i}|${total}|${type}|${part}`);
+        }
+        
+        document.getElementById('tx-status').innerText = `Packets: ${total}`;
+        startTxLoop();
+    }
+
+    // 2. Transmit Loop
+    function startTxLoop() {
+        if(txTimer) clearInterval(txTimer);
+        let ptr = 0; // Pointer
+        
+        const speed = document.getElementById('speed-slider').value;
+        const qrL = document.getElementById('qr-l');
+        const qrR = document.getElementById('qr-r');
+
+        txTimer = setInterval(() => {
+            if(chunks.length === 0) return;
+
+            // Render Left
+            qrL.innerHTML = '';
+            new QRCode(qrL, { text: chunks[ptr], width: 180, height: 180, correctLevel: QRCode.CorrectLevel.L });
             
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            document.body.appendChild(renderer.domElement);
+            // Render Right (if available)
+            qrR.innerHTML = '';
+            let ptrNext = (ptr + 1) % chunks.length;
+            
+            // If we have an odd number of chunks, we might display chunk 0 on Right when Chunk N is on Left. 
+            // That's fine, redundancy is good.
+            if(chunks.length > 1) {
+                new QRCode(qrR, { text: chunks[ptrNext], width: 180, height: 180, correctLevel: QRCode.CorrectLevel.L });
+            }
 
-            // Create the "Globe" environment
-            // We use a large sphere and render the inside
-            const geometry = new THREE.SphereGeometry(50, 64, 64);
-            const material = new THREE.MeshBasicMaterial({
-                color: 0x111111,
-                side: THREE.BackSide,
-                wireframe: true // Makes it look like a digital globe
+            document.getElementById('tx-status').innerText = `Sending: ${ptr+1} & ${ptrNext+1} / ${chunks.length}`;
+
+            // Advance by 2 since we sent 2
+            ptr = (ptr + 2) % chunks.length;
+            
+            // Fix for odd numbers causing a skipped frame logic alignment (minor, but keeps order nicer)
+            if(chunks.length % 2 !== 0 && ptr === chunks.length -1) ptr = 0; 
+
+        }, speed);
+    }
+
+    // ==========================================
+    // RECEIVER LOGIC (Split Screen Scanning)
+    // ==========================================
+
+    async function startCamera() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: 'environment', width: { ideal: 1280 } } 
             });
-            globe = new THREE.Mesh(geometry, material);
-            scene.add(globe);
+            const vid = document.getElementById('webcam');
+            vid.srcObject = stream;
+            requestAnimationFrame(scanFrame);
+        } catch(e) {
+            alert("Camera needed: " + e.message);
+        }
+    }
 
-            // Add "Dots" (Stars/Particles)
-            const dotGeometry = new THREE.BufferGeometry();
-            const dotCoords = [];
-            for (let i = 0; i < 2000; i++) {
-                dotCoords.push((Math.random() - 0.5) * 80);
-                dotCoords.push((Math.random() - 0.5) * 80);
-                dotCoords.push((Math.random() - 0.5) * 80);
-            }
-            dotGeometry.setAttribute('position', new THREE.Float32BufferAttribute(dotCoords, 3));
-            const dotMaterial = new THREE.PointsMaterial({ color: 0x00ffcc, size: 0.2 });
-            const dots = new THREE.Points(dotGeometry, dotMaterial);
-            scene.add(dots);
+    function stopCamera() {
+        const vid = document.getElementById('webcam');
+        if(vid.srcObject) vid.srcObject.getTracks().forEach(t => t.stop());
+        cancelAnimationFrame(rxReq);
+    }
 
-            // Add some floating shapes for depth
-            const boxGeo = new THREE.BoxGeometry(2, 2, 2);
-            for(let i=0; i<20; i++) {
-                const mesh = new THREE.Mesh(boxGeo, new THREE.MeshBasicMaterial({color: 0x00ffcc, wireframe: true}));
-                mesh.position.set((Math.random()-0.5)*40, (Math.random()-0.5)*40, (Math.random()-0.5)*40);
-                scene.add(mesh);
-            }
+    function resetRx() {
+        receivedMap = {};
+        totalChunks = 0;
+        rxComplete = false;
+        document.getElementById('result-display').innerHTML = '';
+        document.getElementById('progress-bar').style.width = '0%';
+        document.getElementById('rx-status').innerText = 'Ready...';
+    }
 
-            animate();
+    function scanFrame() {
+        const vid = document.getElementById('webcam');
+        if(vid.readyState === vid.HAVE_ENOUGH_DATA && !rxComplete) {
+            const w = vid.videoWidth;
+            const h = vid.videoHeight;
+
+            // Split processing into two hidden canvases
+            processHalf(vid, 0, 0, w/2, h, 'ind-l');   // Left Half
+            processHalf(vid, w/2, 0, w/2, h, 'ind-r'); // Right Half
+        }
+        rxReq = requestAnimationFrame(scanFrame);
+    }
+
+    function processHalf(videoEl, sx, sy, sw, sh, indicatorId) {
+        // Create temp canvas logic on the fly or reuse ID? Reusing ID for memory.
+        const cvsId = (sx === 0) ? 'canvas-l' : 'canvas-r';
+        const cvs = document.getElementById(cvsId);
+        const ctx = cvs.getContext('2d', { willReadFrequently: true });
+
+        // Downscale slightly for performance if 1080p, but keep high enough for quality
+        cvs.width = 400; 
+        cvs.height = (sh/sw) * 400;
+
+        ctx.drawImage(videoEl, sx, sy, sw, sh, 0, 0, cvs.width, cvs.height);
+        
+        const imgData = ctx.getImageData(0,0, cvs.width, cvs.height);
+        const code = jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts: "dontInvert" });
+
+        const ind = document.getElementById(indicatorId);
+
+        if(code) {
+            ind.classList.add('active'); // Flash indicator
+            setTimeout(() => ind.classList.remove('active'), 100);
+            parsePacket(code.data);
+        }
+    }
+
+    function parsePacket(raw) {
+        if(rxComplete) return;
+
+        // Fmt: Index|Total|Type|Data
+        const p = raw.split('|');
+        if(p.length < 4) return;
+
+        const idx = parseInt(p[0]);
+        const tot = parseInt(p[1]);
+        const typ = p[2];
+        const pay = p.slice(3).join('|');
+
+        totalChunks = tot;
+
+        if(!receivedMap[idx]) {
+            receivedMap[idx] = pay;
+            updateProgress(typ);
+        }
+    }
+
+    function updateProgress(type) {
+        const count = Object.keys(receivedMap).length;
+        const pct = (count / totalChunks) * 100;
+        
+        document.getElementById('progress-bar').style.width = pct + '%';
+        document.getElementById('rx-status').innerText = `Received: ${count} / ${totalChunks}`;
+
+        if(count === totalChunks) {
+            rxComplete = true;
+            assembleData(type);
+        }
+    }
+
+    function assembleData(type) {
+        let final = "";
+        for(let i=0; i<totalChunks; i++) {
+            final += receivedMap[i];
         }
 
-        function animate() {
-            requestAnimationFrame(animate);
+        const disp = document.getElementById('result-display');
+        document.getElementById('rx-status').innerText = "SUCCESS!";
+        document.getElementById('progress-bar').style.backgroundColor = '#00ff88';
 
-            // Smooth Interpolation (The "Stabilization" logic)
-            currentPitch += (targetPitch - currentPitch) * activePreset.smoothing;
-            currentRoll += (targetRoll - currentRoll) * activePreset.smoothing;
-
-            // Apply rotation to the camera to simulate looking around
-            camera.rotation.set(currentPitch, currentRoll, 0, 'YXZ');
-
-            renderer.render(scene, camera);
+        if(type === 'I') {
+            disp.innerHTML = `<img src="${final}" />`;
+        } else {
+            disp.innerText = final;
         }
+    }
 
-        function handleMotion(event) {
-            const acc = event.accelerationIncludingGravity;
-            if (!acc) return;
-
-            // PRECISE CALCULATION: 
-            // Converting Accelerometer Gravity Vectors to Euler Angles (Pitch/Roll)
-            // Math.atan2 helps determine the angle of the device relative to the ground
-            
-            let x = acc.x;
-            let y = acc.y;
-            let z = acc.z;
-
-            // Calculate Roll (Left/Right tilt)
-            let roll = Math.atan2(x, z);
-            
-            // Calculate Pitch (Up/Down tilt)
-            let pitch = Math.atan2(-y, Math.sqrt(x * x + z * z));
-
-            // Noise Filtering: Ignore tiny vibrations
-            if (Math.abs(roll) < activePreset.noiseFilter) roll = 0;
-            if (Math.abs(pitch) < activePreset.noiseFilter) pitch = 0;
-
-            targetRoll = roll * activePreset.sensitivity;
-            targetPitch = pitch * activePreset.sensitivity;
-
-            // Update HUD
-            document.getElementById('pitch').innerText = (targetPitch * (180/Math.PI)).toFixed(1);
-            document.getElementById('roll').innerText = (targetRoll * (180/Math.PI)).toFixed(1);
-        }
-
-        function setPreset(p) {
-            activePreset = presets[p];
-            document.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-            event.target.classList.add('active');
-            document.getElementById('modeDisplay').innerText = event.target.innerText;
-        }
-
-        document.getElementById('startBtn').addEventListener('click', async () => {
-            if (typeof DeviceMotionEvent.requestPermission === 'function') {
-                const permission = await DeviceMotionEvent.requestPermission();
-                if (permission === 'granted') {
-                    window.addEventListener('devicemotion', handleMotion);
-                }
-            } else {
-                window.addEventListener('devicemotion', handleMotion);
-            }
-            document.getElementById('overlay').style.display = 'none';
-            init3D();
-        });
-
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-    </script>
+</script>
 </body>
 </html>
