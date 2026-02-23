@@ -2,570 +2,524 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Stream-Builder Optical Modem</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2x2 QR Data Transfer</title>
+    
+    <!-- Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+
     <style>
         :root {
-            --bg: #0d0d0d;
-            --accent: #00ff9d;
-            --danger: #ff4444;
-            --panel: #1a1a1a;
+            --bg-color: #121212;
+            --text-color: #ffffff;
+            --accent-color: #00ff9d;
+            --box-border: rgba(0, 255, 157, 0.5);
         }
 
         body {
-            font-family: 'Consolas', 'Courier New', monospace;
-            background: var(--bg);
-            color: #eee;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
             margin: 0;
-            height: 100vh;
             display: flex;
             flex-direction: column;
-            overflow: hidden;
-        }
-
-        /* NAVIGATION PAGES */
-        .page {
-            display: none;
-            flex-direction: column;
             align-items: center;
-            justify-content: center;
-            width: 100%;
-            height: 100%;
-            padding: 20px;
-            box-sizing: border-box;
-        }
-        .page.active { display: flex; }
-
-        h1 { margin-bottom: 30px; letter-spacing: 2px; text-transform: uppercase; text-align: center; font-size: 1.5rem; }
-
-        /* BUTTONS */
-        button {
-            background: transparent;
-            border: 2px solid var(--accent);
-            color: var(--accent);
-            padding: 15px 40px;
-            font-size: 1.1rem;
-            margin: 10px;
-            cursor: pointer;
-            font-weight: bold;
-            text-transform: uppercase;
-            transition: 0.2s;
-            border-radius: 4px;
-        }
-        button:hover { background: var(--accent); color: #000; }
-        button:active { transform: scale(0.95); }
-
-        /* INPUTS */
-        textarea {
-            width: 90%;
-            max-width: 500px;
-            height: 120px;
-            background: #222;
-            border: 1px solid #444;
-            color: #fff;
-            padding: 15px;
-            font-size: 1.2rem;
-            margin-bottom: 20px;
-            font-family: inherit;
+            min-height: 100vh;
+            overflow-x: hidden;
         }
 
-        /* --- TRANSMITTER OVERLAY --- */
-        #tx-overlay {
-            position: fixed;
-            top: 0; left: 0;
-            width: 100vw; height: 100vh;
-            background: #000;
-            z-index: 999;
-            display: none; /* Flex when active */
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-        }
+        h1 { margin-top: 20px; font-size: 1.5rem; text-align: center; }
 
-        .emitter-box-wrapper {
+        /* Menu */
+        #menu {
             display: flex;
             gap: 20px;
-            margin-bottom: 40px;
+            margin-top: 50px;
         }
 
-        .emitter {
-            width: 35vw;
-            height: 35vw;
-            max-width: 250px;
-            max-height: 250px;
-            background: #222;
-            border: 4px solid #444;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 3rem;
-            font-weight: bold;
+        button {
+            padding: 15px 30px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            background: transparent;
+            color: var(--accent-color);
+            border: 2px solid var(--accent-color);
+            border-radius: 8px;
+            transition: 0.3s;
+        }
+
+        button:hover, button.active {
+            background: var(--accent-color);
             color: #000;
         }
 
-        .tx-status {
-            color: #888;
-            font-size: 1.2rem;
-            margin-bottom: 20px;
+        /* container views */
+        .view {
+            display: none;
+            width: 95%;
+            max-width: 600px;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
         }
 
-        #btn-stop-tx {
-            border-color: var(--danger);
-            color: var(--danger);
-            background: #000;
+        .view.active { display: flex; }
+
+        /* Sender UI */
+        .input-group {
+            width: 100%;
+            margin-bottom: 20px;
             display: flex;
-            align-items: center;
+            flex-direction: column;
             gap: 10px;
         }
-        #btn-stop-tx:hover { background: var(--danger); color: #fff; }
 
-        /* SPINNER */
-        .spinner {
-            width: 18px;
-            height: 18px;
-            border: 2px solid rgba(255,255,255,0.3);
-            border-top: 2px solid #fff;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            display: none; /* Hidden by default */
+        textarea {
+            width: 100%;
+            height: 100px;
+            background: #222;
+            color: #fff;
+            border: 1px solid #444;
+            padding: 10px;
+            resize: none;
         }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-        /* --- RECEIVER UI --- */
-        #rx-container {
+        input[type="file"] {
+            background: #222;
+            padding: 10px;
+            width: 100%;
+        }
+
+        #qr-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 10px;
+            background: #fff;
+            padding: 10px;
+            margin-top: 20px;
+            width: 300px;
+            height: 300px;
+            display: none; /* hidden until sending */
+        }
+
+        .qr-cell {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+        
+        .qr-cell img {
+            width: 100%;
+            height: auto;
+        }
+
+        /* Receiver UI */
+        #scanner-container {
             position: relative;
             width: 100%;
-            max-width: 600px;
-            aspect-ratio: 4/3;
+            max-width: 400px;
+            aspect-ratio: 1;
             background: #000;
-            border: 2px solid #333;
             overflow: hidden;
             margin-bottom: 20px;
         }
-        video { width: 100%; height: 100%; object-fit: cover; }
-        
-        .reticle {
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Alignment Overlay */
+        .overlay-grid {
             position: absolute;
-            top: 50%; transform: translateY(-50%);
-            width: 40px; height: 40px;
-            border: 3px solid rgba(255, 0, 0, 0.8);
-            box-shadow: 0 0 10px red;
-            z-index: 10;
-        }
-        #reticle-left { left: 20%; }
-        #reticle-right { right: 20%; }
-
-        #rx-output-box {
-            width: 90%;
-            max-width: 600px;
-            min-height: 80px;
-            background: #151515;
-            border-left: 4px solid var(--accent);
-            padding: 15px;
-            font-size: 1.5rem;
-            line-height: 1.4;
-            word-wrap: break-word;
-            color: #fff;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            pointer-events: none;
         }
 
-        /* Blinking cursor for receiver */
-        .cursor {
-            display: inline-block;
-            width: 10px; height: 20px;
-            background: var(--accent);
-            animation: blink 1s infinite;
-            vertical-align: middle;
-        }
-        @keyframes blink { 50% { opacity: 0; } }
-
-        .status-pill {
-            margin-top: 10px;
-            font-size: 0.9rem;
-            color: #666;
-            text-transform: uppercase;
+        .overlay-box {
+            border: 2px solid var(--box-border);
+            box-sizing: border-box;
+            position: relative;
         }
         
-        canvas { display: none; }
+        .overlay-box::after {
+            content: '';
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 10px; height: 10px;
+            background: rgba(255,0,0,0.5);
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+        }
+
+        #progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #333;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        #progress-fill {
+            width: 0%;
+            height: 100%;
+            background: var(--accent-color);
+            transition: width 0.2s;
+        }
+
+        #result-area {
+            margin-top: 20px;
+            width: 100%;
+            word-break: break-all;
+            background: #222;
+            padding: 10px;
+            min-height: 50px;
+            border: 1px solid #444;
+        }
+
+        #result-area img {
+            max-width: 100%;
+            height: auto;
+        }
+
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
 
-    <!-- HOME PAGE -->
-    <div id="page-home" class="page active">
-        <h1>Stream Builder<br>Optical Link</h1>
-        <button onclick="navigate('send')">Transmitter Mode</button>
-        <button onclick="navigate('rec')">Receiver Mode</button>
+    <h1>Rapid QR Transfer</h1>
+
+    <div id="menu">
+        <button onclick="switchMode('send')">Send</button>
+        <button onclick="switchMode('receive')">Receive</button>
     </div>
 
-    <!-- SENDER PAGE -->
-    <div id="page-send" class="page">
-        <h1>Compose Message</h1>
-        <textarea id="tx-input" placeholder="Type text here...">HELLO WORLD</textarea>
-        <button onclick="startTransmitter()">START TRANSMISSION</button>
-        <button onclick="navigate('home')" style="border-color:#555; color:#777; font-size:0.9rem;">Back</button>
-    </div>
-
-    <!-- TX OVERLAY -->
-    <div id="tx-overlay">
-        <div class="emitter-box-wrapper">
-            <!-- Left: Octal Digit, Right: Repeat Count -->
-            <div id="box-l" class="emitter"></div>
-            <div id="box-r" class="emitter"></div>
-        </div>
-        <div id="tx-counter" class="tx-status">Packet: 0 / 0</div>
-        
-        <button id="btn-stop-tx" onclick="requestStop()">
-            STOP <div id="stop-spinner" class="spinner"></div>
-        </button>
-    </div>
-
-    <!-- RECEIVER PAGE -->
-    <div id="page-rec" class="page">
-        <div id="rx-container">
-            <video id="video" autoplay playsinline></video>
-            <div id="reticle-left" class="reticle"></div>
-            <div id="reticle-right" class="reticle"></div>
+    <!-- SENDER VIEW -->
+    <div id="send-view" class="view">
+        <div class="input-group">
+            <label>1. Enter Text OR Select Image (One at a time)</label>
+            <textarea id="text-input" placeholder="Type text here..." oninput="clearFile()"></textarea>
+            <input type="file" id="file-input" accept="image/*" onchange="clearText()">
         </div>
         
-        <div id="rx-output-box">
-            <span id="built-text"></span><span class="cursor"></span>
+        <button onclick="startSending()" id="btn-start-send">Start Transmission</button>
+        <div id="status-send" style="margin-top:10px; color: #aaa; font-size: 0.9rem;"></div>
+
+        <div id="qr-grid">
+            <div id="qr1" class="qr-cell"></div>
+            <div id="qr2" class="qr-cell"></div>
+            <div id="qr3" class="qr-cell"></div>
+            <div id="qr4" class="qr-cell"></div>
         </div>
-        <div id="rx-status" class="status-pill">Waiting for signal...</div>
-        
-        <button onclick="resetReceiver()" id="btn-reset-rx" style="display:none; margin-top:20px;">SCAN AGAIN</button>
-        <button onclick="navigate('home')" style="margin-top:20px; border-color:#555; color:#777; font-size:0.9rem;">Back</button>
     </div>
 
-    <canvas id="cvs"></canvas>
+    <!-- RECEIVER VIEW -->
+    <div id="receive-view" class="view">
+        <button onclick="toggleCamera()" id="btn-cam">Start Camera</button>
+        
+        <div id="scanner-container">
+            <video id="video" playsinline></video>
+            <div class="overlay-grid">
+                <div class="overlay-box"></div>
+                <div class="overlay-box"></div>
+                <div class="overlay-box"></div>
+                <div class="overlay-box"></div>
+            </div>
+            <canvas id="scan-canvas" style="display:none;"></canvas>
+        </div>
+
+        <div>Progress: <span id="prog-text">0/0</span></div>
+        <div id="progress-bar"><div id="progress-fill"></div></div>
+
+        <div id="result-area">Waiting for data...</div>
+        <button onclick="resetReceiver()" style="margin-top:20px; font-size: 0.9rem; padding: 10px;">Reset</button>
+    </div>
 
     <script>
-        // --- CONSTANTS ---
-        const PULSE_MS = 60; // 60ms ~ 16Hz (Safe for most webcams)
-        
-        // Colors: Black, Red, Green, Blue, Yellow, Cyan, Magenta, White
-        const PALETTE = [
-            [0,0,0], [255,0,0], [0,255,0], [0,0,255], 
-            [255,255,0], [0,255,255], [255,0,255], [255,255,255]
-        ];
-        const GAP_COLOR = [30, 30, 30]; // Dark grey
+        // --- GLOBAL VARIABLES ---
+        const CHUNK_SIZE = 300; // Safe limit for dense QRs (v40 can do more, but hard to scan fast)
+        const FLASH_INTERVAL = 400; // ms per frame
+        const SEPARATOR = "|||";
 
-        // Protocol Markers
-        // We use 7/7 (White/White) for Start
-        // We use 6/6 (Magenta/Magenta) for End (Distinct from data likely)
-        const MK_START = { d: 7, c: 7 };
-        const MK_END   = { d: 6, c: 6 }; 
-        const GAP      = { d: -1, c: -1 };
+        // Sender Globals
+        let sendInterval = null;
+        let chunks = [];
+        let currentFrameIndex = 0;
+        let sessionID = "";
 
-        // --- GLOBAL STATE ---
-        let txInterval = null;
-        let txStopRequested = false;
-        
-        let stream = null;
-        let rxActive = false;
-        let rxState = 'IDLE'; // IDLE, BUILDING, FINISHED
-        let octalQueue = []; // Queue to build characters from
-        let lastPhase = 'GAP'; // GAP or SIGNAL
+        // Receiver Globals
+        let videoStream = null;
+        let isScanning = false;
+        let receivedChunks = {}; // map: index -> data
+        let totalChunksExpected = 0;
+        let currentSessionID = null;
 
-        // --- NAVIGATION ---
-        function navigate(to) {
-            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-            document.getElementById('page-'+to).classList.add('active');
-            
-            // Clean up
-            if(txInterval) clearInterval(txInterval);
-            document.getElementById('tx-overlay').style.display = 'none';
-            if(stream) {
-                stream.getTracks().forEach(t => t.stop());
-                rxActive = false;
-            }
+        // --- UI LOGIC ---
 
-            if(to === 'rec') startCamera();
+        function switchMode(mode) {
+            document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+            document.getElementById(mode + '-view').classList.add('active');
+            stopSending();
+            stopCamera();
         }
 
-        // --- TRANSMITTER ---
+        function clearFile() { document.getElementById('file-input').value = ""; }
+        function clearText() { document.getElementById('text-input').value = ""; }
 
-        function startTransmitter() {
-            const text = document.getElementById('tx-input').value.toUpperCase(); // Force Upper for simplicity
-            if(!text) return;
+        // --- SENDER LOGIC ---
 
-            // 1. Encode Text -> Octal RLE Packets
-            const packets = encodeText(text);
-            const totalPackets = packets.length;
-
-            // 2. Build Transmission Sequence (Start -> Data -> End)
-            // Note: We create a sequence that includes gaps
-            let sequence = [];
+        async function startSending() {
+            stopSending();
             
-            // Header
-            sequence.push(MK_START); sequence.push(GAP); sequence.push(GAP); // Double gap for sync
+            const textData = document.getElementById('text-input').value;
+            const fileInput = document.getElementById('file-input');
+            let dataToSend = "";
 
-            // Payload
-            packets.forEach(p => {
-                sequence.push(p);
-                sequence.push(GAP);
+            if (textData.length > 0) {
+                dataToSend = "TXT" + SEPARATOR + textData;
+            } else if (fileInput.files.length > 0) {
+                const file = fileInput.files[0];
+                dataToSend = "IMG" + SEPARATOR + await toBase64(file);
+            } else {
+                alert("Please enter text or select an image.");
+                return;
+            }
+
+            // Prepare Data
+            sessionID = Math.random().toString(36).substr(2, 5); // Short random ID
+            chunks = splitData(dataToSend);
+            
+            document.getElementById('qr-grid').style.display = 'grid';
+            document.getElementById('status-send').innerText = `Total Packets: ${chunks.length}. Flashing...`;
+
+            currentFrameIndex = 0;
+            renderFrame(); // Show first frame immediately
+
+            // Start Looping Frames
+            if (chunks.length > 4) {
+                sendInterval = setInterval(() => {
+                    currentFrameIndex += 4;
+                    if (currentFrameIndex >= chunks.length) currentFrameIndex = 0;
+                    renderFrame();
+                }, FLASH_INTERVAL);
+            }
+        }
+
+        function stopSending() {
+            if (sendInterval) clearInterval(sendInterval);
+            document.getElementById('qr-grid').style.display = 'none';
+            document.getElementById('qr1').innerHTML = "";
+            document.getElementById('qr2').innerHTML = "";
+            document.getElementById('qr3').innerHTML = "";
+            document.getElementById('qr4').innerHTML = "";
+        }
+
+        function splitData(data) {
+            const numChunks = Math.ceil(data.length / CHUNK_SIZE);
+            const packetArr = [];
+            for (let i = 0; i < numChunks; i++) {
+                const chunk = data.substr(i * CHUNK_SIZE, CHUNK_SIZE);
+                // Protocol: SID ||| TOTAL ||| INDEX ||| DATA
+                const packet = `${sessionID}${SEPARATOR}${numChunks}${SEPARATOR}${i}${SEPARATOR}${chunk}`;
+                packetArr.push(packet);
+            }
+            return packetArr;
+        }
+
+        function renderFrame() {
+            const divs = ['qr1', 'qr2', 'qr3', 'qr4'];
+            for (let i = 0; i < 4; i++) {
+                const chunkIndex = currentFrameIndex + i;
+                const container = document.getElementById(divs[i]);
+                container.innerHTML = ""; // Clear
+
+                if (chunkIndex < chunks.length) {
+                    new QRCode(container, {
+                        text: chunks[chunkIndex],
+                        width: 128,
+                        height: 128,
+                        colorDark : "#000000",
+                        colorLight : "#ffffff",
+                        correctLevel : QRCode.CorrectLevel.M
+                    });
+                } else {
+                    // Empty placeholder if not enough chunks to fill 2x2
+                    container.innerHTML = `<div style="background:#ccc;width:100%;height:100%"></div>`;
+                }
+            }
+        }
+
+        function toBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = error => reject(error);
             });
-
-            // Footer
-            sequence.push(MK_END); sequence.push(GAP); sequence.push(GAP);
-
-            // 3. UI Setup
-            document.getElementById('tx-overlay').style.display = 'flex';
-            document.getElementById('btn-stop-tx').disabled = false;
-            document.getElementById('stop-spinner').style.display = 'none';
-            document.getElementById('btn-stop-tx').innerText = "STOP";
-            document.getElementById('btn-stop-tx').appendChild(document.getElementById('stop-spinner')); // Move spinner back in
-            txStopRequested = false;
-
-            let idx = 0;
-            const boxL = document.getElementById('box-l');
-            const boxR = document.getElementById('box-r');
-            const counter = document.getElementById('tx-counter');
-
-            // 4. Loop
-            txInterval = setInterval(() => {
-                const item = sequence[idx];
-
-                if(item.d === -1) {
-                    // GAP
-                    setBox(boxL, GAP_COLOR, "");
-                    setBox(boxR, GAP_COLOR, "");
-                } else {
-                    // DATA or MARKER
-                    const colL = PALETTE[item.d];
-                    const colR = PALETTE[item.c];
-                    
-                    let txtL = item.d;
-                    let txtR = "x"+item.c;
-
-                    if(item === MK_START) { txtL="S"; txtR="T"; }
-                    if(item === MK_END)   { txtL="E"; txtR="N"; }
-
-                    setBox(boxL, colL, txtL);
-                    setBox(boxR, colR, txtR);
-                }
-
-                // Update Counter (Approximate based on sequence index)
-                // Payload starts at index 3 (Start, Gap, Gap). Each payload is 2 frames (Data, Gap).
-                if(idx > 2 && idx < sequence.length - 3) {
-                    let pIdx = Math.ceil((idx - 3) / 2);
-                    if(pIdx > totalPackets) pIdx = totalPackets;
-                    counter.innerText = `Sending Packet: ${pIdx} / ${totalPackets}`;
-                }
-
-                idx++;
-                
-                // End of Sequence?
-                if(idx >= sequence.length) {
-                    idx = 0; // Loop
-                    
-                    // Graceful Stop Check
-                    if(txStopRequested) {
-                        clearInterval(txInterval);
-                        document.getElementById('tx-overlay').style.display = 'none';
-                    }
-                }
-
-            }, PULSE_MS);
         }
 
-        function encodeText(text) {
-            let raw = [];
-            for(let i=0; i<text.length; i++) {
-                // ASCII to Octal (3 digits)
-                let oct = text.charCodeAt(i).toString(8).padStart(3, '0');
-                oct.split('').forEach(digit => raw.push(parseInt(digit)));
-            }
+        // --- RECEIVER LOGIC ---
 
-            // RLE Compression
-            let compressed = [];
-            if(raw.length === 0) return [];
-            
-            let cur = raw[0];
-            let count = 1;
-            
-            for(let i=1; i<raw.length; i++) {
-                if(raw[i] === cur && count < 7) {
-                    count++;
-                } else {
-                    compressed.push({ d: cur, c: count });
-                    cur = raw[i];
-                    count = 1;
-                }
-            }
-            compressed.push({ d: cur, c: count });
-            return compressed;
+        function toggleCamera() {
+            if(isScanning) stopCamera();
+            else startCamera();
         }
-
-        function setBox(el, rgb, text) {
-            el.style.backgroundColor = `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
-            el.innerText = text;
-            // Adaptive Text Color
-            const brightness = (rgb[0] + rgb[1] + rgb[2]) / 3;
-            el.style.color = brightness > 100 ? 'black' : 'white';
-        }
-
-        function requestStop() {
-            txStopRequested = true;
-            const btn = document.getElementById('btn-stop-tx');
-            btn.disabled = true;
-            btn.childNodes[0].textContent = "FINISHING... "; // Text node
-            document.getElementById('stop-spinner').style.display = 'inline-block';
-        }
-
-        // --- RECEIVER ---
 
         async function startCamera() {
-            resetReceiver();
             const video = document.getElementById('video');
             try {
-                stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: 'environment', frameRate: { ideal: 60 } } 
-                });
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                videoStream = stream;
                 video.srcObject = stream;
-                rxActive = true;
-                requestAnimationFrame(rxLoop);
-            } catch(e) { alert("Camera access failed"); }
+                video.setAttribute("playsinline", true);
+                video.play();
+                requestAnimationFrame(tick);
+                isScanning = true;
+                document.getElementById('btn-cam').innerText = "Stop Camera";
+            } catch (err) {
+                alert("Error accessing camera: " + err);
+            }
+        }
+
+        function stopCamera() {
+            isScanning = false;
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+                videoStream = null;
+            }
+            document.getElementById('btn-cam').innerText = "Start Camera";
+        }
+
+        function tick() {
+            if (!isScanning) return;
+            const video = document.getElementById('video');
+            
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                const canvas = document.getElementById('scan-canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.height = video.videoHeight;
+                canvas.width = video.videoWidth;
+                
+                // Draw current frame to canvas
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                // We need to scan 4 quadrants
+                const w = canvas.width;
+                const h = canvas.height;
+                const halfW = w / 2;
+                const halfH = h / 2;
+
+                // Define 4 regions (x, y, w, h)
+                const regions = [
+                    { x: 0, y: 0, w: halfW, h: halfH },         // Top Left
+                    { x: halfW, y: 0, w: halfW, h: halfH },     // Top Right
+                    { x: 0, y: halfH, w: halfW, h: halfH },     // Bottom Left
+                    { x: halfW, y: halfH, w: halfW, h: halfH }  // Bottom Right
+                ];
+
+                regions.forEach(r => {
+                    const imageData = ctx.getImageData(r.x, r.y, r.w, r.h);
+                    // jsQR scan
+                    const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                        inversionAttempts: "dontInvert",
+                    });
+
+                    if (code && code.data) {
+                        processQRData(code.data);
+                    }
+                });
+            }
+            requestAnimationFrame(tick);
+        }
+
+        function processQRData(dataString) {
+            // Protocol: SID ||| TOTAL ||| INDEX ||| DATA
+            const parts = dataString.split(SEPARATOR);
+            if (parts.length < 4) return; // Invalid format
+
+            const sid = parts[0];
+            const total = parseInt(parts[1]);
+            const index = parseInt(parts[2]);
+            const payload = parts.slice(3).join(SEPARATOR); // Rejoin in case payload had separator
+
+            // Check Session
+            if (currentSessionID !== null && currentSessionID !== sid) {
+                // New session detected, ask to reset?
+                // For simplicity, if we have very little data, auto-reset, otherwise ignore
+                if (Object.keys(receivedChunks).length < 2) {
+                    resetReceiver();
+                    currentSessionID = sid;
+                } else {
+                    return; // Ignore data from other session
+                }
+            }
+            
+            if (currentSessionID === null) {
+                currentSessionID = sid;
+                totalChunksExpected = total;
+            }
+
+            // Store Data
+            if (!receivedChunks[index]) {
+                receivedChunks[index] = payload;
+                updateProgress();
+            }
+        }
+
+        function updateProgress() {
+            const count = Object.keys(receivedChunks).length;
+            const percentage = (count / totalChunksExpected) * 100;
+            
+            document.getElementById('prog-text').innerText = `${count}/${totalChunksExpected}`;
+            document.getElementById('progress-fill').style.width = `${percentage}%`;
+
+            if (count === totalChunksExpected && totalChunksExpected > 0) {
+                finishReceive();
+            }
+        }
+
+        function finishReceive() {
+            stopCamera();
+            let fullString = "";
+            for (let i = 0; i < totalChunksExpected; i++) {
+                fullString += receivedChunks[i];
+            }
+
+            const type = fullString.split(SEPARATOR)[0]; // TXT or IMG
+            const content = fullString.substring(type.length + SEPARATOR.length);
+
+            const resultArea = document.getElementById('result-area');
+            resultArea.innerHTML = "";
+
+            if (type === "IMG") {
+                const img = document.createElement('img');
+                img.src = content;
+                resultArea.appendChild(img);
+            } else {
+                resultArea.innerText = content;
+            }
+            
+            alert("Transfer Complete!");
         }
 
         function resetReceiver() {
-            document.getElementById('built-text').innerText = "";
-            document.getElementById('rx-status').innerText = "Align Red Squares to Boxes...";
-            document.getElementById('rx-status').style.color = "#888";
-            document.getElementById('btn-reset-rx').style.display = 'none';
-            rxState = 'IDLE';
-            octalQueue = [];
-            rxActive = true;
-        }
-
-        function rxLoop() {
-            if(!rxActive) return;
-            // Stop logic: if we are FINISHED, we stop requesting frames (camera freezes, effectively)
-            if(rxState === 'FINISHED') return; 
-
-            const video = document.getElementById('video');
-            const cvs = document.getElementById('cvs');
-            const ctx = cvs.getContext('2d');
-
-            if(video.readyState === video.HAVE_ENOUGH_DATA) {
-                cvs.width = video.videoWidth;
-                cvs.height = video.videoHeight;
-                ctx.drawImage(video, 0, 0);
-
-                // Sample ROI (20% from edges)
-                const y = Math.floor(cvs.height / 2);
-                const xL = Math.floor(cvs.width * 0.20);
-                const xR = Math.floor(cvs.width * 0.80);
-
-                const cL = detectColor(ctx, xL, y);
-                const cR = detectColor(ctx, xR, y);
-
-                processSignal(cL, cR);
-            }
-            requestAnimationFrame(rxLoop);
-        }
-
-        function detectColor(ctx, x, y) {
-            const p = ctx.getImageData(x-10, y-10, 20, 20).data;
-            let r=0, g=0, b=0;
-            // Average pixels
-            for(let i=0; i<p.length; i+=4) { r+=p[i]; g+=p[i+1]; b+=p[i+2]; }
-            r = r/(p.length/4); g = g/(p.length/4); b = b/(p.length/4);
-
-            // Distance to Gap
-            if(dist([r,g,b], GAP_COLOR) < 60) return -1;
-
-            // Distance to Palette
-            let minD = 9999;
-            let match = -1;
-            PALETTE.forEach((col, idx) => {
-                const d = dist([r,g,b], col);
-                if(d < minD) { minD = d; match = idx; }
-            });
-
-            // Threshold: If color is too muddy, assume gap/noise
-            if(minD > 100) return -1;
-            return match;
-        }
-
-        function dist(c1, c2) {
-            return Math.sqrt(Math.pow(c1[0]-c2[0],2) + Math.pow(c1[1]-c2[1],2) + Math.pow(c1[2]-c2[2],2));
-        }
-
-        function processSignal(L, R) {
-            const isGap = (L === -1 || R === -1);
-
-            // EDGE TRIGGER: Process only on transition from GAP -> SIGNAL
-            if(lastPhase === 'GAP' && !isGap) {
-                
-                // 1. Check START (7/7)
-                if(L === MK_START.d && R === MK_START.c) {
-                    rxState = 'BUILDING';
-                    document.getElementById('rx-status').innerText = "RECEIVING STREAM...";
-                    document.getElementById('rx-status').style.color = "#00ff9d";
-                    document.getElementById('built-text').innerText = "";
-                    octalQueue = [];
-                    lastPhase = 'SIGNAL';
-                    return;
-                }
-
-                // 2. Check END (6/6)
-                if(L === MK_END.d && R === MK_END.c) {
-                    if(rxState === 'BUILDING') {
-                        rxState = 'FINISHED';
-                        document.getElementById('rx-status').innerText = "TRANSMISSION COMPLETE";
-                        document.getElementById('rx-status').style.color = "#fff";
-                        document.getElementById('btn-reset-rx').style.display = 'inline-block';
-                        // Stop camera stream to save battery and freeze result
-                        if(stream) stream.getTracks().forEach(t => t.stop());
-                    }
-                    lastPhase = 'SIGNAL';
-                    return;
-                }
-
-                // 3. Process DATA
-                if(rxState === 'BUILDING') {
-                    // L is Digit, R is Count (1-7)
-                    let val = L;
-                    let count = R;
-                    
-                    // Clamp count
-                    if(count < 1) count = 1;
-                    if(count > 7) count = 7;
-
-                    // Push to Queue
-                    for(let k=0; k<count; k++) {
-                        octalQueue.push(val);
-                    }
-
-                    // Attempt to Build Character immediately
-                    buildCharacterFromQueue();
-                }
-            }
-
-            lastPhase = isGap ? 'GAP' : 'SIGNAL';
-        }
-
-        function buildCharacterFromQueue() {
-            // We need 3 octal digits to make 1 ASCII char
-            while(octalQueue.length >= 3) {
-                // Shift first 3
-                const o1 = octalQueue.shift();
-                const o2 = octalQueue.shift();
-                const o3 = octalQueue.shift();
-
-                const octalStr = `${o1}${o2}${o3}`;
-                const asciiCode = parseInt(octalStr, 8);
-                const char = String.fromCharCode(asciiCode);
-
-                // Append to screen
-                const display = document.getElementById('built-text');
-                display.innerText += char;
-                
-                // Auto-scroll
-                const container = document.getElementById('rx-output-box');
-                container.scrollTop = container.scrollHeight;
-            }
+            receivedChunks = {};
+            totalChunksExpected = 0;
+            currentSessionID = null;
+            document.getElementById('prog-text').innerText = "0/0";
+            document.getElementById('progress-fill').style.width = "0%";
+            document.getElementById('result-area').innerHTML = "Waiting for data...";
+            if(!isScanning) startCamera();
         }
 
     </script>
