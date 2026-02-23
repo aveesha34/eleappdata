@@ -3,110 +3,110 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ultrafast Optical Modem</title>
+    <title>Stream-Builder Optical Modem</title>
     <style>
         :root {
-            --bg: #121212;
-            --primary: #00ff9d;
+            --bg: #0d0d0d;
+            --accent: #00ff9d;
             --danger: #ff4444;
-            --panel: #1e1e1e;
+            --panel: #1a1a1a;
         }
 
         body {
-            font-family: 'Courier New', Courier, monospace;
+            font-family: 'Consolas', 'Courier New', monospace;
             background: var(--bg);
-            color: #fff;
+            color: #eee;
             margin: 0;
-            padding: 0;
             height: 100vh;
             display: flex;
             flex-direction: column;
-            overflow: hidden; /* Prevent scrolling during fullscreen tx */
+            overflow: hidden;
         }
 
-        /* --- NAVIGATION & LAYOUT --- */
+        /* NAVIGATION PAGES */
         .page {
             display: none;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 100%;
             width: 100%;
+            height: 100%;
             padding: 20px;
             box-sizing: border-box;
         }
-
         .page.active { display: flex; }
 
-        h1 { margin-bottom: 30px; text-transform: uppercase; letter-spacing: 2px; text-align: center; }
+        h1 { margin-bottom: 30px; letter-spacing: 2px; text-transform: uppercase; text-align: center; font-size: 1.5rem; }
 
+        /* BUTTONS */
         button {
             background: transparent;
-            border: 2px solid var(--primary);
-            color: var(--primary);
-            padding: 15px 30px;
-            font-size: 1.2rem;
+            border: 2px solid var(--accent);
+            color: var(--accent);
+            padding: 15px 40px;
+            font-size: 1.1rem;
             margin: 10px;
             cursor: pointer;
             font-weight: bold;
-            transition: 0.2s;
             text-transform: uppercase;
+            transition: 0.2s;
+            border-radius: 4px;
         }
+        button:hover { background: var(--accent); color: #000; }
+        button:active { transform: scale(0.95); }
 
-        button:hover { background: var(--primary); color: #000; }
-        button:active { transform: scale(0.98); }
-
-        /* --- SENDER INPUT PAGE --- */
+        /* INPUTS */
         textarea {
             width: 90%;
-            max-width: 600px;
-            height: 100px;
+            max-width: 500px;
+            height: 120px;
             background: #222;
             border: 1px solid #444;
             color: #fff;
-            padding: 10px;
-            font-size: 1rem;
+            padding: 15px;
+            font-size: 1.2rem;
             margin-bottom: 20px;
+            font-family: inherit;
         }
 
-        /* --- FULLSCREEN TRANSMISSION OVERLAY --- */
+        /* --- TRANSMITTER OVERLAY --- */
         #tx-overlay {
             position: fixed;
             top: 0; left: 0;
             width: 100vw; height: 100vh;
             background: #000;
-            z-index: 1000;
-            display: none; /* Hidden by default */
+            z-index: 999;
+            display: none; /* Flex when active */
             flex-direction: column;
             align-items: center;
             justify-content: center;
         }
 
-        .emitter-container {
+        .emitter-box-wrapper {
             display: flex;
             gap: 20px;
-            margin-bottom: 50px;
+            margin-bottom: 40px;
         }
 
         .emitter {
-            width: 40vw; /* Large boxes */
-            height: 40vw;
-            max-width: 300px;
-            max-height: 300px;
-            background: #333;
-            border: 4px solid #555;
+            width: 35vw;
+            height: 35vw;
+            max-width: 250px;
+            max-height: 250px;
+            background: #222;
+            border: 4px solid #444;
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 3rem;
-            color: #000;
             font-weight: bold;
+            color: #000;
         }
 
-        .tx-info {
+        .tx-status {
             color: #888;
-            margin-bottom: 20px;
             font-size: 1.2rem;
+            margin-bottom: 20px;
         }
 
         #btn-stop-tx {
@@ -119,61 +119,73 @@
         }
         #btn-stop-tx:hover { background: var(--danger); color: #fff; }
 
-        /* Spinner for graceful stop */
+        /* SPINNER */
         .spinner {
-            border: 3px solid rgba(255,255,255,0.3);
-            border-top: 3px solid #fff;
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top: 2px solid #fff;
             border-radius: 50%;
-            width: 20px;
-            height: 20px;
             animation: spin 1s linear infinite;
-            display: none;
+            display: none; /* Hidden by default */
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-        /* --- RECEIVER PAGE --- */
-        #video-container {
+        /* --- RECEIVER UI --- */
+        #rx-container {
             position: relative;
             width: 100%;
             max-width: 600px;
             aspect-ratio: 4/3;
             background: #000;
-            border: 2px solid #444;
+            border: 2px solid #333;
             overflow: hidden;
+            margin-bottom: 20px;
         }
-        
         video { width: 100%; height: 100%; object-fit: cover; }
-
-        /* Targeting Reticles */
-        .roi {
+        
+        .reticle {
             position: absolute;
             top: 50%; transform: translateY(-50%);
-            width: 50px; height: 50px;
-            border: 3px solid red;
-            box-shadow: 0 0 15px red;
+            width: 40px; height: 40px;
+            border: 3px solid rgba(255, 0, 0, 0.8);
+            box-shadow: 0 0 10px red;
             z-index: 10;
         }
-        #roi-left { left: 20%; }
-        #roi-right { right: 20%; }
+        #reticle-left { left: 20%; }
+        #reticle-right { right: 20%; }
 
-        #rx-status {
-            margin-top: 15px;
-            font-size: 1.2rem;
-            color: #aaa;
-        }
-
-        #rx-result {
-            margin-top: 10px;
-            padding: 15px;
-            background: #222;
-            border: 1px solid var(--primary);
+        #rx-output-box {
             width: 90%;
-            min-height: 50px;
-            word-break: break-all;
-            font-size: 1.2rem;
-            display: none; /* Hidden until result found */
+            max-width: 600px;
+            min-height: 80px;
+            background: #151515;
+            border-left: 4px solid var(--accent);
+            padding: 15px;
+            font-size: 1.5rem;
+            line-height: 1.4;
+            word-wrap: break-word;
+            color: #fff;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
         }
 
+        /* Blinking cursor for receiver */
+        .cursor {
+            display: inline-block;
+            width: 10px; height: 20px;
+            background: var(--accent);
+            animation: blink 1s infinite;
+            vertical-align: middle;
+        }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        .status-pill {
+            margin-top: 10px;
+            font-size: 0.9rem;
+            color: #666;
+            text-transform: uppercase;
+        }
+        
         canvas { display: none; }
     </style>
 </head>
@@ -181,210 +193,227 @@
 
     <!-- HOME PAGE -->
     <div id="page-home" class="page active">
-        <h1>Optical Modem<br>Link</h1>
-        <button onclick="navTo('send')">Transmitter Mode</button>
-        <button onclick="navTo('receive')">Receiver Mode</button>
+        <h1>Stream Builder<br>Optical Link</h1>
+        <button onclick="navigate('send')">Transmitter Mode</button>
+        <button onclick="navigate('rec')">Receiver Mode</button>
     </div>
 
     <!-- SENDER PAGE -->
     <div id="page-send" class="page">
         <h1>Compose Message</h1>
-        <textarea id="tx-input" placeholder="Type message here...">HELLO WORLD</textarea>
-        <button onclick="startTransmissionLoop()">START TRANSMISSION</button>
-        <button onclick="navTo('home')" style="border-color:#555; color:#aaa; font-size:0.8rem;">Back</button>
+        <textarea id="tx-input" placeholder="Type text here...">HELLO WORLD</textarea>
+        <button onclick="startTransmitter()">START TRANSMISSION</button>
+        <button onclick="navigate('home')" style="border-color:#555; color:#777; font-size:0.9rem;">Back</button>
     </div>
 
-    <!-- FULLSCREEN TX OVERLAY -->
+    <!-- TX OVERLAY -->
     <div id="tx-overlay">
-        <div class="emitter-container">
-            <div id="box-l" class="emitter"></div> <!-- Data -->
-            <div id="box-r" class="emitter"></div> <!-- Count -->
+        <div class="emitter-box-wrapper">
+            <!-- Left: Octal Digit, Right: Repeat Count -->
+            <div id="box-l" class="emitter"></div>
+            <div id="box-r" class="emitter"></div>
         </div>
-        <div class="tx-info" id="tx-counter">Waiting...</div>
+        <div id="tx-counter" class="tx-status">Packet: 0 / 0</div>
         
         <button id="btn-stop-tx" onclick="requestStop()">
-            STOP TRANSMISSION <div class="spinner" id="stop-spinner"></div>
+            STOP <div id="stop-spinner" class="spinner"></div>
         </button>
     </div>
 
     <!-- RECEIVER PAGE -->
-    <div id="page-receive" class="page">
-        <h1>Receiver</h1>
-        <div id="video-container">
+    <div id="page-rec" class="page">
+        <div id="rx-container">
             <video id="video" autoplay playsinline></video>
-            <div id="roi-left" class="roi"></div>
-            <div id="roi-right" class="roi"></div>
+            <div id="reticle-left" class="reticle"></div>
+            <div id="reticle-right" class="reticle"></div>
         </div>
-        <div id="rx-status">Waiting for Signal...</div>
-        <div id="rx-result"></div>
-        <button onclick="resetReceiver()" id="btn-rescan" style="display:none; margin-top:20px;">SCAN AGAIN</button>
-        <button onclick="navTo('home')" style="margin-top:30px; border-color:#555; color:#aaa; font-size:0.8rem;">Back</button>
+        
+        <div id="rx-output-box">
+            <span id="built-text"></span><span class="cursor"></span>
+        </div>
+        <div id="rx-status" class="status-pill">Waiting for signal...</div>
+        
+        <button onclick="resetReceiver()" id="btn-reset-rx" style="display:none; margin-top:20px;">SCAN AGAIN</button>
+        <button onclick="navigate('home')" style="margin-top:20px; border-color:#555; color:#777; font-size:0.9rem;">Back</button>
     </div>
 
     <canvas id="cvs"></canvas>
 
     <script>
-        // --- CONFIGURATION ---
-        const PULSE_TIME = 40; // ms (Speed of light... almost)
-        const COLORS = [
+        // --- CONSTANTS ---
+        const PULSE_MS = 60; // 60ms ~ 16Hz (Safe for most webcams)
+        
+        // Colors: Black, Red, Green, Blue, Yellow, Cyan, Magenta, White
+        const PALETTE = [
             [0,0,0], [255,0,0], [0,255,0], [0,0,255], 
             [255,255,0], [0,255,255], [255,0,255], [255,255,255]
-        ]; // 0-7
-        const GAP_COLOR = [20, 20, 20]; // Dark grey for "No Data"
+        ];
+        const GAP_COLOR = [30, 30, 30]; // Dark grey
 
-        // Markers
-        const MARKER_START = { d: 7, c: 7 }; // White/White
-        const MARKER_END   = { d: 1, c: 1 }; // Red/Red
-        const GAP          = { d: -1, c: -1 };
+        // Protocol Markers
+        // We use 7/7 (White/White) for Start
+        // We use 6/6 (Magenta/Magenta) for End (Distinct from data likely)
+        const MK_START = { d: 7, c: 7 };
+        const MK_END   = { d: 6, c: 6 }; 
+        const GAP      = { d: -1, c: -1 };
 
-        // --- GLOBAL VARIABLES ---
-        let txInterval;
-        let stopRequested = false;
+        // --- GLOBAL STATE ---
+        let txInterval = null;
+        let txStopRequested = false;
+        
         let stream = null;
         let rxActive = false;
-        let rxCompleted = false; // Prevents re-reading
-        let rxBuffer = [];
-        let rxState = 'IDLE'; // IDLE, READING
+        let rxState = 'IDLE'; // IDLE, BUILDING, FINISHED
+        let octalQueue = []; // Queue to build characters from
+        let lastPhase = 'GAP'; // GAP or SIGNAL
 
         // --- NAVIGATION ---
-        function navTo(pageId) {
-            // Stop everything
-            stopTxImmediate();
-            stopCamera();
-            
+        function navigate(to) {
             document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-            document.getElementById('page-' + pageId).classList.add('active');
+            document.getElementById('page-'+to).classList.add('active');
+            
+            // Clean up
+            if(txInterval) clearInterval(txInterval);
+            document.getElementById('tx-overlay').style.display = 'none';
+            if(stream) {
+                stream.getTracks().forEach(t => t.stop());
+                rxActive = false;
+            }
 
-            if(pageId === 'receive') startCamera();
+            if(to === 'rec') startCamera();
         }
 
-        // --- TRANSMITTER LOGIC ---
+        // --- TRANSMITTER ---
 
-        function encode(text) {
-            // 1. ASCII to Octal
-            let octals = [];
-            for(let i=0; i<text.length; i++) {
-                let s = text.charCodeAt(i).toString(8).padStart(3,'0');
-                s.split('').forEach(x => octals.push(parseInt(x)));
-            }
-            // 2. RLE Compression
-            let packets = [];
-            if(octals.length === 0) return [];
-            let curr = octals[0], count = 1;
-            for(let i=1; i<octals.length; i++) {
-                if(octals[i] === curr && count < 7) count++;
-                else { packets.push({d: curr, c: count}); curr = octals[i]; count = 1; }
-            }
-            packets.push({d: curr, c: count});
-            return packets;
-        }
+        function startTransmitter() {
+            const text = document.getElementById('tx-input').value.toUpperCase(); // Force Upper for simplicity
+            if(!text) return;
 
-        function startTransmissionLoop() {
-            const text = document.getElementById('tx-input').value;
-            if(!text) return alert("Enter text!");
-            
-            const payload = encode(text);
-            
-            // Show Overlay
-            document.getElementById('tx-overlay').style.display = 'flex';
-            document.getElementById('btn-stop-tx').disabled = false;
-            document.getElementById('stop-spinner').style.display = 'none';
-            stopRequested = false;
+            // 1. Encode Text -> Octal RLE Packets
+            const packets = encodeText(text);
+            const totalPackets = packets.length;
 
-            // Build Full Sequence: START -> [Data/Gap...] -> END -> GAP
-            // We construct one "Loop Frame".
+            // 2. Build Transmission Sequence (Start -> Data -> End)
+            // Note: We create a sequence that includes gaps
             let sequence = [];
             
             // Header
-            sequence.push(MARKER_START); 
-            sequence.push(GAP); sequence.push(GAP); // Extra gap for clear sync
+            sequence.push(MK_START); sequence.push(GAP); sequence.push(GAP); // Double gap for sync
 
-            // Body
-            payload.forEach(p => {
+            // Payload
+            packets.forEach(p => {
                 sequence.push(p);
                 sequence.push(GAP);
             });
 
             // Footer
-            sequence.push(MARKER_END);
-            sequence.push(GAP); sequence.push(GAP);
+            sequence.push(MK_END); sequence.push(GAP); sequence.push(GAP);
+
+            // 3. UI Setup
+            document.getElementById('tx-overlay').style.display = 'flex';
+            document.getElementById('btn-stop-tx').disabled = false;
+            document.getElementById('stop-spinner').style.display = 'none';
+            document.getElementById('btn-stop-tx').innerText = "STOP";
+            document.getElementById('btn-stop-tx').appendChild(document.getElementById('stop-spinner')); // Move spinner back in
+            txStopRequested = false;
 
             let idx = 0;
-            const totalPackets = payload.length;
-            let dataPacketsSent = 0; // For UI counter
-
             const boxL = document.getElementById('box-l');
             const boxR = document.getElementById('box-r');
             const counter = document.getElementById('tx-counter');
 
+            // 4. Loop
             txInterval = setInterval(() => {
-                const packet = sequence[idx];
-                
-                // Color update
-                if(packet.d === -1) {
-                    setBoxColor(boxL, GAP_COLOR);
-                    setBoxColor(boxR, GAP_COLOR);
+                const item = sequence[idx];
+
+                if(item.d === -1) {
+                    // GAP
+                    setBox(boxL, GAP_COLOR, "");
+                    setBox(boxR, GAP_COLOR, "");
                 } else {
-                    setBoxColor(boxL, COLORS[packet.d]);
-                    setBoxColor(boxR, COLORS[packet.c]);
+                    // DATA or MARKER
+                    const colL = PALETTE[item.d];
+                    const colR = PALETTE[item.c];
                     
-                    // Update counter only if it's actual data
-                    if(packet !== MARKER_START && packet !== MARKER_END) {
-                        // We rely on order. 
-                        // Visual helper:
-                        boxL.innerText = packet.d;
-                        boxR.innerText = packet.c;
-                    } else {
-                        boxL.innerText = (packet === MARKER_START) ? "S" : "E";
-                        boxR.innerText = "";
-                    }
+                    let txtL = item.d;
+                    let txtR = "x"+item.c;
+
+                    if(item === MK_START) { txtL="S"; txtR="T"; }
+                    if(item === MK_END)   { txtL="E"; txtR="N"; }
+
+                    setBox(boxL, colL, txtL);
+                    setBox(boxR, colR, txtR);
                 }
 
-                // Increment
+                // Update Counter (Approximate based on sequence index)
+                // Payload starts at index 3 (Start, Gap, Gap). Each payload is 2 frames (Data, Gap).
+                if(idx > 2 && idx < sequence.length - 3) {
+                    let pIdx = Math.ceil((idx - 3) / 2);
+                    if(pIdx > totalPackets) pIdx = totalPackets;
+                    counter.innerText = `Sending Packet: ${pIdx} / ${totalPackets}`;
+                }
+
                 idx++;
-
-                // Logic to update UI Packet Counter
-                // This is an estimation based on index, as sequence includes gaps
-                let currentPayloadIndex = Math.floor((idx - 3) / 2); // approximate
-                if(currentPayloadIndex < 0) currentPayloadIndex = 0;
-                if(currentPayloadIndex > totalPackets) currentPayloadIndex = totalPackets;
-                counter.innerText = `Packet: ${currentPayloadIndex} / ${totalPackets}`;
-
-
-                // Loop Check
-                if (idx >= sequence.length) {
-                    idx = 0; // Loop back to start
-                    dataPacketsSent = 0;
-
-                    // CHECK FOR STOP REQUEST
-                    if (stopRequested) {
-                        stopTxImmediate();
+                
+                // End of Sequence?
+                if(idx >= sequence.length) {
+                    idx = 0; // Loop
+                    
+                    // Graceful Stop Check
+                    if(txStopRequested) {
+                        clearInterval(txInterval);
                         document.getElementById('tx-overlay').style.display = 'none';
                     }
                 }
 
-            }, PULSE_TIME);
+            }, PULSE_MS);
+        }
+
+        function encodeText(text) {
+            let raw = [];
+            for(let i=0; i<text.length; i++) {
+                // ASCII to Octal (3 digits)
+                let oct = text.charCodeAt(i).toString(8).padStart(3, '0');
+                oct.split('').forEach(digit => raw.push(parseInt(digit)));
+            }
+
+            // RLE Compression
+            let compressed = [];
+            if(raw.length === 0) return [];
+            
+            let cur = raw[0];
+            let count = 1;
+            
+            for(let i=1; i<raw.length; i++) {
+                if(raw[i] === cur && count < 7) {
+                    count++;
+                } else {
+                    compressed.push({ d: cur, c: count });
+                    cur = raw[i];
+                    count = 1;
+                }
+            }
+            compressed.push({ d: cur, c: count });
+            return compressed;
+        }
+
+        function setBox(el, rgb, text) {
+            el.style.backgroundColor = `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+            el.innerText = text;
+            // Adaptive Text Color
+            const brightness = (rgb[0] + rgb[1] + rgb[2]) / 3;
+            el.style.color = brightness > 100 ? 'black' : 'white';
         }
 
         function requestStop() {
-            stopRequested = true;
-            document.getElementById('btn-stop-tx').disabled = true;
-            document.getElementById('stop-spinner').style.display = 'block';
-            document.getElementById('tx-counter').innerText = "Finishing current message...";
+            txStopRequested = true;
+            const btn = document.getElementById('btn-stop-tx');
+            btn.disabled = true;
+            btn.childNodes[0].textContent = "FINISHING... "; // Text node
+            document.getElementById('stop-spinner').style.display = 'inline-block';
         }
 
-        function stopTxImmediate() {
-            if(txInterval) clearInterval(txInterval);
-            document.getElementById('tx-overlay').style.display = 'none';
-        }
-
-        function setBoxColor(el, rgb) {
-            el.style.backgroundColor = `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
-            // Contrast text
-            el.style.color = (rgb[0] > 100 && rgb[1] > 100) ? 'black' : 'white';
-        }
-
-        // --- RECEIVER LOGIC ---
+        // --- RECEIVER ---
 
         async function startCamera() {
             resetReceiver();
@@ -396,34 +425,23 @@
                 video.srcObject = stream;
                 rxActive = true;
                 requestAnimationFrame(rxLoop);
-            } catch (e) { alert("Camera Error"); }
-        }
-
-        function stopCamera() {
-            rxActive = false;
-            if(stream) stream.getTracks().forEach(t => t.stop());
+            } catch(e) { alert("Camera access failed"); }
         }
 
         function resetReceiver() {
-            rxBuffer = [];
+            document.getElementById('built-text').innerText = "";
+            document.getElementById('rx-status').innerText = "Align Red Squares to Boxes...";
+            document.getElementById('rx-status').style.color = "#888";
+            document.getElementById('btn-reset-rx').style.display = 'none';
             rxState = 'IDLE';
-            rxCompleted = false;
-            document.getElementById('rx-result').style.display = 'none';
-            document.getElementById('rx-result').innerText = "";
-            document.getElementById('rx-status').innerText = "Align boxes in red squares...";
-            document.getElementById('rx-status').style.color = "#aaa";
-            document.getElementById('btn-rescan').style.display = 'none';
+            octalQueue = [];
+            rxActive = true;
         }
-
-        let lastPhase = 'GAP'; // GAP or SIGNAL
 
         function rxLoop() {
             if(!rxActive) return;
-            // Stop processing if we already have the message
-            if(rxCompleted) {
-                requestAnimationFrame(rxLoop); // Keep camera running but don't process
-                return; 
-            }
+            // Stop logic: if we are FINISHED, we stop requesting frames (camera freezes, effectively)
+            if(rxState === 'FINISHED') return; 
 
             const video = document.getElementById('video');
             const cvs = document.getElementById('cvs');
@@ -434,104 +452,120 @@
                 cvs.height = video.videoHeight;
                 ctx.drawImage(video, 0, 0);
 
-                // ROI Positions (20% from left/right)
+                // Sample ROI (20% from edges)
                 const y = Math.floor(cvs.height / 2);
                 const xL = Math.floor(cvs.width * 0.20);
                 const xR = Math.floor(cvs.width * 0.80);
 
-                const colL = getColorCode(ctx, xL, y);
-                const colR = getColorCode(ctx, xR, y);
+                const cL = detectColor(ctx, xL, y);
+                const cR = detectColor(ctx, xR, y);
 
-                processRxSignal(colL, colR);
+                processSignal(cL, cR);
             }
             requestAnimationFrame(rxLoop);
         }
 
-        function getColorCode(ctx, x, y) {
+        function detectColor(ctx, x, y) {
             const p = ctx.getImageData(x-10, y-10, 20, 20).data;
-            let r=0,g=0,b=0,c=0;
-            for(let i=0; i<p.length; i+=4) { r+=p[i]; g+=p[i+1]; b+=p[i+2]; c++; }
-            r/=c; g/=c; b/=c;
+            let r=0, g=0, b=0;
+            // Average pixels
+            for(let i=0; i<p.length; i+=4) { r+=p[i]; g+=p[i+1]; b+=p[i+2]; }
+            r = r/(p.length/4); g = g/(p.length/4); b = b/(p.length/4);
 
-            // Is it Gap?
+            // Distance to Gap
             if(dist([r,g,b], GAP_COLOR) < 60) return -1;
 
-            // Closest color
-            let minD = 9999, idx = -1;
-            COLORS.forEach((col, i) => {
+            // Distance to Palette
+            let minD = 9999;
+            let match = -1;
+            PALETTE.forEach((col, idx) => {
                 const d = dist([r,g,b], col);
-                if(d < minD) { minD = d; idx = i; }
+                if(d < minD) { minD = d; match = idx; }
             });
-            return (minD < 100) ? idx : -1;
+
+            // Threshold: If color is too muddy, assume gap/noise
+            if(minD > 100) return -1;
+            return match;
         }
 
         function dist(c1, c2) {
-            return Math.sqrt((c1[0]-c2[0])**2 + (c1[1]-c2[1])**2 + (c1[2]-c2[2])**2);
+            return Math.sqrt(Math.pow(c1[0]-c2[0],2) + Math.pow(c1[1]-c2[1],2) + Math.pow(c1[2]-c2[2],2));
         }
 
-        function processRxSignal(L, R) {
+        function processSignal(L, R) {
             const isGap = (L === -1 || R === -1);
 
-            // Edge Trigger: Only act when we transition GAP -> SIGNAL
+            // EDGE TRIGGER: Process only on transition from GAP -> SIGNAL
             if(lastPhase === 'GAP' && !isGap) {
                 
-                // 1. Check for START (White/White = 7/7)
-                if(L === 7 && R === 7) {
-                    rxState = 'READING';
-                    rxBuffer = [];
-                    document.getElementById('rx-status').innerText = "Receiving Data...";
+                // 1. Check START (7/7)
+                if(L === MK_START.d && R === MK_START.c) {
+                    rxState = 'BUILDING';
+                    document.getElementById('rx-status').innerText = "RECEIVING STREAM...";
                     document.getElementById('rx-status').style.color = "#00ff9d";
+                    document.getElementById('built-text').innerText = "";
+                    octalQueue = [];
                     lastPhase = 'SIGNAL';
                     return;
                 }
 
-                // 2. Check for END (Red/Red = 1/1)
-                if(L === 1 && R === 1) {
-                    if(rxState === 'READING') {
-                        finishReception();
+                // 2. Check END (6/6)
+                if(L === MK_END.d && R === MK_END.c) {
+                    if(rxState === 'BUILDING') {
+                        rxState = 'FINISHED';
+                        document.getElementById('rx-status').innerText = "TRANSMISSION COMPLETE";
+                        document.getElementById('rx-status').style.color = "#fff";
+                        document.getElementById('btn-reset-rx').style.display = 'inline-block';
+                        // Stop camera stream to save battery and freeze result
+                        if(stream) stream.getTracks().forEach(t => t.stop());
                     }
                     lastPhase = 'SIGNAL';
                     return;
                 }
 
-                // 3. Data Packet
-                if(rxState === 'READING') {
-                    // L = Octal Digit, R = Count (1-7)
+                // 3. Process DATA
+                if(rxState === 'BUILDING') {
+                    // L is Digit, R is Count (1-7)
+                    let val = L;
                     let count = R;
-                    if(count < 1) count = 1; if(count > 7) count = 7;
                     
-                    for(let k=0; k<count; k++) rxBuffer.push(L);
-                    
-                    document.getElementById('rx-status').innerText = `packets: ${rxBuffer.length}`;
+                    // Clamp count
+                    if(count < 1) count = 1;
+                    if(count > 7) count = 7;
+
+                    // Push to Queue
+                    for(let k=0; k<count; k++) {
+                        octalQueue.push(val);
+                    }
+
+                    // Attempt to Build Character immediately
+                    buildCharacterFromQueue();
                 }
             }
 
             lastPhase = isGap ? 'GAP' : 'SIGNAL';
         }
 
-        function finishReception() {
-            rxCompleted = true; // STOP READING
-            rxState = 'IDLE';
+        function buildCharacterFromQueue() {
+            // We need 3 octal digits to make 1 ASCII char
+            while(octalQueue.length >= 3) {
+                // Shift first 3
+                const o1 = octalQueue.shift();
+                const o2 = octalQueue.shift();
+                const o3 = octalQueue.shift();
 
-            // Decode Buffer
-            let msg = "";
-            for(let i=0; i<rxBuffer.length; i+=3) {
-                if(i+2 < rxBuffer.length) {
-                    const oct = "" + rxBuffer[i] + rxBuffer[i+1] + rxBuffer[i+2];
-                    msg += String.fromCharCode(parseInt(oct, 8));
-                }
+                const octalStr = `${o1}${o2}${o3}`;
+                const asciiCode = parseInt(octalStr, 8);
+                const char = String.fromCharCode(asciiCode);
+
+                // Append to screen
+                const display = document.getElementById('built-text');
+                display.innerText += char;
+                
+                // Auto-scroll
+                const container = document.getElementById('rx-output-box');
+                container.scrollTop = container.scrollHeight;
             }
-
-            // Display
-            const status = document.getElementById('rx-status');
-            status.innerText = "Transmission Complete";
-            status.style.color = "#fff";
-
-            const resDiv = document.getElementById('rx-result');
-            resDiv.style.display = 'block';
-            resDiv.innerText = msg;
-
-            document.getElementById('btn-rescan').style.display = 'inline-block';
         }
 
     </script>
