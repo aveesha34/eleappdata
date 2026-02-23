@@ -5,19 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>High Density QR Transfer</title>
     
-    <!-- Dependencies -->
+    <!-- Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 
     <style>
         :root {
-            --primary: #00e5ff; /* Cyan for High Tech */
+            --primary: #00e5ff;
             --bg: #111;
             --surface: #1e1e1e;
+            --modal-bg: rgba(0, 0, 0, 0.95);
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Segoe UI', sans-serif;
             background-color: var(--bg);
             color: #eee;
             display: flex;
@@ -28,10 +29,10 @@
             min-height: 100vh;
         }
 
-        h2 { text-transform: uppercase; letter-spacing: 1px; color: var(--primary); margin-bottom: 10px; }
+        h2 { color: var(--primary); text-transform: uppercase; letter-spacing: 1px; }
 
+        /* Navigation */
         .nav { margin: 15px 0; display: flex; gap: 15px; }
-        
         button {
             background: rgba(0, 229, 255, 0.1);
             color: var(--primary);
@@ -42,13 +43,12 @@
             border-radius: 4px;
             transition: 0.3s;
         }
-        
         button:hover, button.active {
             background: var(--primary);
             color: #000;
-            box-shadow: 0 0 15px var(--primary);
         }
 
+        /* Container Views */
         .container {
             display: none;
             width: 100%;
@@ -58,44 +58,37 @@
             background: var(--surface);
             padding: 20px;
             border-radius: 8px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            box-sizing: border-box;
         }
-
         .container.active { display: flex; }
 
-        /* Sender Styles */
+        /* Sender UI */
         #qr-display {
             background: #fff;
             padding: 15px;
             margin-top: 20px;
             border-radius: 4px;
-            /* Fixed size for consistency */
             width: 400px;
             height: 400px;
             display: flex;
             justify-content: center;
             align-items: center;
         }
-
-        /* Adjust for mobile screens */
         @media (max-width: 450px) {
             #qr-display { width: 300px; height: 300px; }
-            #qr-display img { width: 100%; height: auto; }
         }
 
-        input[type="file"], textarea {
+        input, textarea {
             width: 100%;
             background: #000;
             color: #fff;
             border: 1px solid #444;
-            padding: 12px;
-            margin-bottom: 15px;
-            border-radius: 4px;
+            padding: 10px;
+            box-sizing: border-box;
+            margin-bottom: 10px;
         }
 
-        .stats { font-size: 0.9rem; color: #aaa; margin-top: 10px; font-family: monospace; }
-
-        /* Receiver Styles */
+        /* Receiver UI */
         #cam-wrapper {
             position: relative;
             width: 100%;
@@ -105,8 +98,7 @@
             border-radius: 8px;
             overflow: hidden;
         }
-
-        video { width: 100%; height: auto; display: block; }
+        video { width: 100%; display: block; }
 
         #progress-container {
             width: 100%;
@@ -117,14 +109,12 @@
             border-radius: 15px;
             overflow: hidden;
         }
-
         #progress-bar {
             height: 100%;
-            background: linear-gradient(90deg, var(--primary), #00ff9d);
+            background: var(--primary);
             width: 0%;
             transition: width 0.2s ease-out;
         }
-
         #progress-text {
             position: absolute;
             width: 100%;
@@ -135,43 +125,62 @@
             font-weight: bold;
             text-shadow: 1px 1px 2px #000;
             pointer-events: none;
-            font-size: 0.9rem;
         }
 
-        #result {
-            margin-top: 20px;
-            width: 100%;
-            background: #000;
-            padding: 10px;
-            border: 1px solid #333;
-            min-height: 50px;
-            word-wrap: break-word;
+        /* MODAL POPUP */
+        #modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--modal-bg);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
         }
-        #result img { max-width: 100%; height: auto; border: 1px solid #444; }
+        #modal-overlay.show { display: flex; }
+        
+        #modal-content {
+            background: var(--surface);
+            padding: 20px;
+            border: 2px solid var(--primary);
+            border-radius: 8px;
+            max-width: 90%;
+            max-height: 90%;
+            overflow-y: auto;
+            text-align: center;
+        }
+        #modal-body img {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #555;
+            margin-bottom: 15px;
+        }
+        #modal-body {
+            margin-bottom: 20px;
+            word-break: break-all;
+        }
 
     </style>
 </head>
 <body>
 
-    <h2>High-Density Link</h2>
+    <h2>Secure Data Link</h2>
 
     <div class="nav">
-        <button onclick="setMode('send')" id="btn-send">Send Data</button>
-        <button onclick="setMode('receive')" id="btn-receive">Receive Data</button>
+        <button onclick="setMode('send')" id="btn-send">Sender</button>
+        <button onclick="setMode('receive')" id="btn-receive">Receiver</button>
     </div>
 
     <!-- SENDER VIEW -->
     <div id="view-send" class="container">
-        <div style="width:100%">
-            <textarea id="txt-in" placeholder="Type text here..." rows="2" oninput="processInput('txt')"></textarea>
-            <div style="text-align:center; color:#666; font-size:0.8rem; margin: 5px 0;">OR UPLOAD IMAGE</div>
-            <input type="file" id="file-in" accept="image/*" onchange="processInput('img')">
-        </div>
+        <textarea id="txt-in" placeholder="Type text..." rows="2" oninput="processInput('txt')"></textarea>
+        <div style="font-size:0.8rem; margin:5px 0; color:#888;">OR</div>
+        <input type="file" id="file-in" accept="image/*" onchange="processInput('img')">
         
         <div id="qr-display"></div>
-        <div class="stats" id="send-stats">Select file to start...</div>
-        
-        <button onclick="stopSending()" style="margin-top:15px; border-color:#ff4444; color:#ff4444;">Stop Transmission</button>
+        <div id="send-stats" style="margin-top:10px; color:#aaa; font-family:monospace;">Waiting...</div>
+        <button onclick="stopSending()" style="margin-top:15px; border-color:red; color:red;">Stop</button>
     </div>
 
     <!-- RECEIVER VIEW -->
@@ -183,27 +192,31 @@
         
         <div id="progress-container">
             <div id="progress-bar"></div>
-            <div id="progress-text">Waiting... 0%</div>
+            <div id="progress-text">0%</div>
         </div>
-
-        <div id="result">Data will appear here...</div>
-        <button onclick="resetReceiver()" style="margin-top:15px;">Reset Scanner</button>
+        <div style="margin-top:10px; color:#888;">Align camera with QR code</div>
+        <button onclick="resetReceiver()" style="margin-top:10px;">Reset</button>
     </div>
 
-    <!-- UTILITY CANVAS -->
+    <!-- POPUP MODAL -->
+    <div id="modal-overlay">
+        <div id="modal-content">
+            <h3 style="margin-top:0;">Transfer Complete</h3>
+            <div id="modal-body"></div>
+            <button onclick="closeModal()">Close & Scan Again</button>
+        </div>
+    </div>
+
+    <!-- Hidden Canvas for Compression -->
     <canvas id="compressor" style="display:none;"></canvas>
 
     <script>
         // --- CONFIGURATION ---
-        // 350ms = Approx 3 frames per second (Slower, allowing camera focus)
-        const FLASH_SPEED_MS = 350; 
-        
-        // 1200 chars per QR = High Density (Requires good focus)
-        const CHUNK_MAX_LEN = 1200; 
-        
-        const MAX_IMG_SIZE = 300; // Allow slightly larger images since we have higher density
+        const FLASH_SPEED_MS = 350; // 4x slower (approx 3 FPS)
+        const CHUNK_MAX_LEN = 1200; // High Density
+        const MAX_IMG_SIZE = 300;   // Compression Size
 
-        // --- STATE ---
+        // --- GLOBAL VARIABLES ---
         let sendTimer = null;
         let qrObj = null;
         let packetList = [];
@@ -219,36 +232,33 @@
             document.querySelectorAll('.container').forEach(e => e.classList.remove('active'));
             document.getElementById('view-' + mode).classList.add('active');
             
-            // Toggle Active Button Styles
             document.getElementById('btn-send').classList.toggle('active', mode === 'send');
             document.getElementById('btn-receive').classList.toggle('active', mode === 'receive');
 
-            if(mode === 'send') { 
-                stopCamera(); 
-            } else { 
-                stopSending(); 
-                startCamera(); 
+            if(mode === 'send') stopCamera();
+            else {
+                stopSending();
+                startCamera();
             }
         }
 
         // --- SENDER ---
-
         async function processInput(type) {
             stopSending();
             let rawData = "";
 
             if (type === 'txt') {
-                const txt = document.getElementById('txt-in').value;
-                if(!txt) return;
-                rawData = "T:" + txt;
+                const val = document.getElementById('txt-in').value;
+                if(!val) return;
+                rawData = "T:" + val;
                 prepareAndTransmit(rawData);
             } 
             else if (type === 'img') {
                 const file = document.getElementById('file-in').files[0];
                 if (!file) return;
+                document.getElementById('send-stats').innerText = "Compressing Image...";
                 
-                document.getElementById('send-stats').innerText = "Compressing...";
-                // 1. Compress Image
+                // Compress
                 const compressedBase64 = await compressImage(file);
                 rawData = "I:" + compressedBase64;
                 prepareAndTransmit(rawData);
@@ -265,7 +275,7 @@
                         let w = img.width;
                         let h = img.height;
                         
-                        // Maintain aspect ratio, max dimension 300px
+                        // Resize (Lossy dimension)
                         if (w > h) {
                             if (w > MAX_IMG_SIZE) { h *= MAX_IMG_SIZE / w; w = MAX_IMG_SIZE; }
                         } else {
@@ -277,7 +287,7 @@
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, w, h);
                         
-                        // JPEG 0.5 Quality (Size Losing)
+                        // JPEG compression (Lossy quality)
                         resolve(canvas.toDataURL('image/jpeg', 0.5)); 
                     };
                     img.src = e.target.result;
@@ -287,28 +297,24 @@
         }
 
         function prepareAndTransmit(dataString) {
-            // 2. Split Data
             packetList = [];
+            // Calculate chunks
             const total = Math.ceil(dataString.length / CHUNK_MAX_LEN);
             
             for (let i = 0; i < total; i++) {
                 const chunk = dataString.substr(i * CHUNK_MAX_LEN, CHUNK_MAX_LEN);
-                // Header Format: Index|Total|Data
-                // Using | as separator saves chars compared to JSON
+                // Protocol: Index|Total|Data
                 packetList.push(`${i}|${total}|${chunk}`);
             }
 
-            document.getElementById('send-stats').innerText = `Total Packets: ${total}. Flashing...`;
+            document.getElementById('send-stats').innerText = `Packets: ${total}. Flashing...`;
             
-            // 3. Setup QR Container
             const container = document.getElementById('qr-display');
             container.innerHTML = "";
-            
-            // Create QR Object with larger dimensions for High Density
             qrObj = new QRCode(container, {
                 width: 400,
                 height: 400,
-                correctLevel : QRCode.CorrectLevel.L // Low ECC maximizes data capacity
+                correctLevel : QRCode.CorrectLevel.L
             });
 
             startFlashing();
@@ -322,16 +328,11 @@
             sendTimer = setInterval(() => {
                 if (packetList.length === 0) return;
                 
-                // Next frame
                 index++;
                 if (index >= packetList.length) index = 0;
                 
                 qrObj.makeCode(packetList[index]);
-                
-                // Update UI slightly
-                document.getElementById('send-stats').innerText = 
-                    `Broadcasting Packet: ${index + 1} / ${packetList.length}`;
-
+                document.getElementById('send-stats').innerText = `Sending: ${index+1}/${packetList.length}`;
             }, FLASH_SPEED_MS);
         }
 
@@ -343,12 +344,13 @@
         }
 
         // --- RECEIVER ---
-
         async function startCamera() {
-            resetReceiver();
+            // Only start if not completed
+            if(receiveCompleted) return;
+
+            resetUI();
             const video = document.getElementById('video');
             try {
-                // Request back camera
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { facingMode: "environment" } 
                 });
@@ -359,14 +361,14 @@
                 isScanning = true;
                 requestAnimationFrame(scanLoop);
             } catch (err) {
-                document.getElementById('result').innerText = "Camera Error: " + err;
+                alert("Camera Error: " + err);
             }
         }
 
         function stopCamera() {
             isScanning = false;
             if (videoStream) {
-                videoStream.getTracks().forEach(t => t.stop());
+                videoStream.getTracks().forEach(track => track.stop());
                 videoStream = null;
             }
         }
@@ -382,10 +384,8 @@
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
                 ctx.drawImage(video, 0, 0);
-
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 
-                // Scan for QR
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 const code = jsQR(imageData.data, imageData.width, imageData.height, {
                     inversionAttempts: "dontInvert"
                 });
@@ -398,27 +398,22 @@
         }
 
         function parsePacket(str) {
-            // Format: Index|Total|Data
-            // Find first two pipes
+            // Find separators
             const p1 = str.indexOf('|');
             const p2 = str.indexOf('|', p1 + 1);
-            
             if (p1 === -1 || p2 === -1) return;
 
-            const idxStr = str.substring(0, p1);
-            const totStr = str.substring(p1 + 1, p2);
+            const idx = parseInt(str.substring(0, p1));
+            const tot = parseInt(str.substring(p1 + 1, p2));
             const data = str.substring(p2 + 1);
-
-            const idx = parseInt(idxStr);
-            const tot = parseInt(totStr);
 
             if (isNaN(idx) || isNaN(tot)) return;
 
-            // Initialize total
+            // Initialize Session
             if (totalPackets === 0) totalPackets = tot;
-            if (totalPackets !== tot) return; // Wrong session data
+            if (totalPackets !== tot) return; // Ignore different session data
 
-            // Store
+            // Store Data
             if (!receivedPackets[idx]) {
                 receivedPackets[idx] = data;
                 updateProgress();
@@ -430,7 +425,7 @@
             const pct = Math.round((count / totalPackets) * 100);
             
             document.getElementById('progress-bar').style.width = pct + "%";
-            document.getElementById('progress-text').innerText = `${count} / ${totalPackets} (${pct}%)`;
+            document.getElementById('progress-text').innerText = `${count}/${totalPackets}`;
 
             if (count === totalPackets && !receiveCompleted) {
                 finishReceive();
@@ -439,50 +434,58 @@
 
         function finishReceive() {
             receiveCompleted = true;
-            stopCamera();
-            
+            stopCamera(); // Stop camera immediately
+
+            // Reconstruct Data
             let fullStr = "";
             for (let i = 0; i < totalPackets; i++) {
-                fullStr += receivedPackets[i];
+                if(receivedPackets[i]) {
+                    fullStr += receivedPackets[i];
+                }
             }
 
+            // Determine Content
             const type = fullStr.substring(0, 2); // T: or I:
             const content = fullStr.substring(2);
-
-            const resDiv = document.getElementById('result');
-            resDiv.innerHTML = "";
+            
+            const body = document.getElementById('modal-body');
+            body.innerHTML = "";
 
             if (type === "I:") {
-                // Image
                 const img = document.createElement('img');
                 img.src = content;
-                resDiv.appendChild(img);
+                body.appendChild(img);
                 
                 const note = document.createElement('div');
-                note.innerText = "Image Reconstructed Successfully.";
-                note.style.color = "#0f0";
-                note.style.marginTop = "10px";
-                resDiv.appendChild(note);
+                note.innerText = "Image Reconstructed.";
+                body.appendChild(note);
             } else {
-                // Text
-                resDiv.innerText = content;
+                body.innerText = content;
             }
-            document.getElementById('progress-text').innerText = "COMPLETE";
-            document.getElementById('progress-bar').style.background = "#0f0";
+
+            // Show Popup
+            document.getElementById('modal-overlay').classList.add('show');
+        }
+
+        function closeModal() {
+            document.getElementById('modal-overlay').classList.remove('show');
+            resetReceiver(); // This resets state and restarts camera
+        }
+
+        function resetUI() {
+            document.getElementById('progress-bar').style.width = "0%";
+            document.getElementById('progress-text').innerText = "0%";
         }
 
         function resetReceiver() {
             receivedPackets = {};
             totalPackets = 0;
             receiveCompleted = false;
-            document.getElementById('progress-bar').style.width = "0%";
-            document.getElementById('progress-bar').style.background = "linear-gradient(90deg, var(--primary), #00ff9d)";
-            document.getElementById('progress-text').innerText = "Waiting... 0%";
-            document.getElementById('result').innerHTML = "Data will appear here...";
-            if(!isScanning && document.getElementById('view-receive').classList.contains('active')) {
-                startCamera();
-            }
+            resetUI();
+            stopCamera();
+            startCamera();
         }
+
     </script>
 </body>
 </html>
